@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes AgentOS — Mission Control</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .status { font-size: 13px; color: var(--text-dim); }
+  .header .status .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 6px;
+  }
+  .dot.green { background: var(--green); }
+  .dot.red { background: var(--red); }
+  .dot.yellow { background: var(--yellow); }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h2 {
+    font-size: 14px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card h2 .badge {
+    float: right; font-size: 11px; padding: 2px 8px;
+    border-radius: 10px; background: var(--border); color: var(--text);
+  }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .stat-row .label { color: var(--text-dim); }
+  .stat-row .value { font-weight: 500; }
+
+  .platform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .platform-item {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; text-align: center;
+  }
+  .platform-item .name { font-size: 12px; color: var(--text-dim); text-transform: uppercase; }
+  .platform-item .state { font-size: 14px; font-weight: 600; margin-top: 4px; }
+  .state.connected { color: var(--green); }
+  .state.disconnected { color: var(--red); }
+  .state.unknown { color: var(--yellow); }
+
+  .progress-bar {
+    height: 8px; background: var(--bg); border-radius: 4px;
+    overflow: hidden; margin-top: 4px;
+  }
+  .progress-bar .fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .fill.green { background: var(--green); }
+  .fill.yellow { background: var(--yellow); }
+  .fill.red { background: var(--red); }
+  .fill.blue { background: var(--accent); }
+
+  .agent-list { list-style: none; }
+  .agent-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .agent-list li:last-child { border-bottom: none; }
+  .agent-list .agent-name { font-weight: 600; min-width: 80px; }
+  .agent-list .agent-stats { color: var(--text-dim); flex: 1; }
+  .agent-list .agent-model { font-size: 11px; color: var(--text-dim); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--text-dim); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+
+  .cron-job {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px;
+  }
+  .cron-job .schedule { font-family: monospace; color: var(--accent); }
+  .cron-job .english { color: var(--text); margin-top: 2px; }
+  .cron-job .source { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+
+  .task-board { margin-top: 16px; }
+  .task-col { margin-bottom: 16px; }
+  .task-col h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+  .task-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; margin-bottom: 6px; font-size: 12px;
+  }
+  .task-card .task-title { font-weight: 600; }
+  .task-card .task-meta { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+  .task-card .priority-high { color: var(--red); }
+  .task-card .priority-medium { color: var(--yellow); }
+  .task-card .priority-low { color: var(--green); }
+
+  .daily-chart { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin-top: 8px; }
+  .daily-chart .bar {
+    flex: 1; background: var(--accent); border-radius: 3px 3px 0 0;
+    min-height: 4px; position: relative;
+  }
+  .daily-chart .bar .label {
+    position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-dim);
+  }
+  .daily-chart .bar .count {
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--text);
+  }
+
+  .sse-indicator {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .sse-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red); transition: background 0.3s;
+  }
+  .sse-dot.live { background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .timestamp { font-size: 11px; color: var(--text-dim); text-align: right; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ Hermes AgentOS — Mission Control</h1>
+  <div class="status">
+    <span class="sse-indicator">
+      <span class="sse-dot" id="sseDot"></span>
+      <span id="sseLabel">Connecting...</span>
+    </span>
+    &nbsp;|&nbsp; <span id="gatewayState">—</span>
+    &nbsp;|&nbsp; <span id="uptime">—</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Gateway + VPS row -->
+  <div class="grid" style="margin-bottom:16px">
+
+    <!-- Gateway Status -->
+    <div class="card" id="gatewayCard">
+      <h2>Gateway <span class="badge" id="agentCount">0 agents</span></h2>
+      <div class="platform-grid" id="platformGrid"></div>
+      <div class="timestamp" id="gatewayUpdated"></div>
+    </div>
+
+    <!-- VPS Health -->
+    <div class="card" id="vpsCard">
+      <h2>VPS Health</h2>
+      <div id="vpsContent"></div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="card" id="sessionsCard">
+      <h2>Sessions <span class="badge" id="sessionCount">0</span></h2>
+      <div id="sessionsContent"></div>
+    </div>
+  </div>
+
+  <!-- Activity + Cron row -->
+  <div class="grid" style="margin-bottom:16px">
+
+    <!-- Activity -->
+    <div class="card" id="activityCard" style="grid-column: span 2">
+      <h2>Agent Activity <span class="badge" id="activityTotal">0 logs</span></h2>
+      <div id="activityContent"></div>
+    </div>
+
+    <!-- Cron Jobs -->
+    <div class="card" id="cronCard">
+      <h2>Cron Jobs <span class="badge" id="cronCount">0</span></h2>
+      <div id="cronContent"></div>
+    </div>
+  </div>
+
+  <!-- Task Board -->
+  <div class="card task-board" id="boardCard">
+    <h2>Personal Task Board <span class="badge" id="boardCount">0 tasks</span></h2>
+    <div id="boardContent" class="grid" style="grid-template-columns: repeat(3, 1fr)"></div>
+  </div>
+
+</div>
+
+<script>
+const API = '';
+let sse;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+
+function renderSnapshot(data) {
+  // --- Gateway ---
+  const gw = data.gateway || {};
+  if (gw.error) {
+    document.getElementById('gatewayState').textContent = 'Error: ' + gw.error;
+  } else {
+    document.getElementById('gatewayState').textContent = 'State: ' + (gw.gateway_state || '—');
+    document.getElementById('agentCount').textContent = (gw.active_agents || 0) + ' agents';
+
+    const uptimeSec = gw.uptime_seconds || 0;
+    const h = Math.floor(uptimeSec / 3600);
+    const m = Math.floor((uptimeSec % 3600) / 60);
+    document.getElementById('uptime').textContent = `Uptime: ${h}h ${m}m`;
+
+    const grid = document.getElementById('platformGrid');
+    grid.innerHTML = '';
+    const platforms = gw.platforms || {};
+    for (const [name, info] of Object.entries(platforms)) {
+      const d = el('div', 'platform-item');
+      d.innerHTML = `<div class="name">${name}</div><div class="state ${info.state}">${info.state}</div>`;
+      grid.appendChild(d);
+    }
+    document.getElementById('gatewayUpdated').textContent = 'Updated: ' + (gw.updated_at || '—');
+  }
+
+  // --- VPS ---
+  const vps = data.vps || {};
+  const vpsEl = document.getElementById('vpsContent');
+  vpsEl.innerHTML = '';
+  if (vps.cpu_percent != null) {
+    const cpuColor = vps.cpu_percent > 80 ? 'red' : vps.cpu_percent > 50 ? 'yellow' : 'green';
+    vpsEl.appendChild(statRow('CPU', `${vps.cpu_percent}%`, vps.cpu_percent, cpuColor));
+  }
+  if (vps.ram && !vps.ram.error) {
+    const r = vps.ram;
+    vpsEl.appendChild(statRow('RAM', `${r.used_kb >> 10}MB / ${r.total_kb >> 10}MB (${r.percent}%)`, r.percent, r.percent > 80 ? 'red' : r.percent > 50 ? 'yellow' : 'green'));
+  }
+  if (vps.disk && !vps.disk.error) {
+    const d = vps.disk;
+    vpsEl.appendChild(statRow('Disk', `${(d.used_bytes >> 30)}GB / ${(d.total_bytes >> 30)}GB (${d.percent}%)`, d.percent, d.percent > 85 ? 'red' : d.percent > 60 ? 'yellow' : 'green'));
+  }
+
+  // --- Sessions ---
+  const sess = data.sessions || {};
+  document.getElementById('sessionCount').textContent = (sess.session_count || 0) + ' sessions';
+  const sc = document.getElementById('sessionsContent');
+  sc.innerHTML = '';
+  const tokens = sess.tokens || {};
+  sc.appendChild(statRow('Messages', (sess.message_count || 0).toLocaleString()));
+  sc.appendChild(statRow('Input tokens', (tokens.input || 0).toLocaleString()));
+  sc.appendChild(statRow('Output tokens', (tokens.output || 0).toLocaleString()));
+  sc.appendChild(statRow('Cache read', (tokens.cache_read || 0).toLocaleString()));
+  sc.appendChild(statRow('Cache write', (tokens.cache_write || 0).toLocaleString()));
+
+  // Recent sessions table
+  const recent = (sess.recent_sessions || []).slice(0, 5);
+  if (recent.length) {
+    const tbl = el('table');
+    tbl.innerHTML = '<tr><th>ID</th><th>Model</th><th>Messages</th><th>Input</th><th>Output</th></tr>';
+    for (const s of recent) {
+      const tr = el('tr');
+      tr.innerHTML = `<td style="font-family:monospace;font-size:11px">${s.id?.slice(0, 14) || '—'}</td><td>${s.model || '—'}</td><td>${s.message_count || 0}</td><td>${(s.input_tokens || 0).toLocaleString()}</td><td>${(s.output_tokens || 0).toLocaleString()}</td>`;
+      tbl.appendChild(tr);
+    }
+    sc.appendChild(tbl);
+  }
+
+  // --- Activity ---
+  const act = data.activity || {};
+  const totals = act.totals || {};
+  document.getElementById('activityTotal').textContent = `${totals.total || 0} logs`;
+  const ac = document.getElementById('activityContent');
+  ac.innerHTML = '';
+
+  // Daily chart
+  const daily = act.daily || [];
+  if (daily.length) {
+    const maxCount = Math.max(...daily.map(d => d.count), 1);
+    const chart = el('div', 'daily-chart');
+    for (const d of daily) {
+      const bar = el('div', 'bar');
+      bar.style.height = Math.max(4, (d.count / maxCount) * 50) + 'px';
+      bar.innerHTML = `<span class="count">${d.count}</span><span class="label">${d.day?.slice(5) || ''}</span>`;
+      chart.appendChild(bar);
+    }
+    ac.appendChild(chart);
+    ac.appendChild(el('div', '', '')); // spacer
+  }
+
+  // Agent list
+  const agents = act.agents || {};
+  const ul = el('ul', 'agent-list');
+  for (const [name, info] of Object.entries(agents)) {
+    const li = el('li');
+    li.innerHTML = `
+      <span class="agent-name">${name}</span>
+      <span class="agent-stats">${info.completed}✓ ${info.failed}✗ / ${info.total} total — last: ${info.last_task?.slice(0, 40) || '—'}</span>
+      <span class="agent-model">${info.model || ''}</span>
+    `;
+    ul.appendChild(li);
+  }
+  ac.appendChild(ul);
+
+  // --- Cron ---
+  const cron = data.cron || [];
+  document.getElementById('cronCount').textContent = cron.length + ' jobs';
+  const cc = document.getElementById('cronContent');
+  cc.innerHTML = '';
+  for (const job of cron) {
+    if (job.error) {
+      cc.appendChild(el('div', 'cron-job', 'Error: ' + job.error));
+      continue;
+    }
+    const d = el('div', 'cron-job');
+    d.innerHTML = `
+      <div class="schedule">${job.schedule_raw}</div>
+      <div class="english">${job.schedule_english}</div>
+      <div class="source">${job.source} · ${job.label}</div>
+    `;
+    cc.appendChild(d);
+  }
+
+  // --- Board ---
+  renderBoard();
+}
+
+function statRow(label, value, pct, color) {
+  const d = el('div', 'stat-row');
+  if (pct != null) {
+    d.innerHTML = `<span class="label">${label}</span><span class="value">${value}</span>`;
+    const bar = el('div', 'progress-bar');
+    bar.innerHTML = `<div class="fill ${color}" style="width:${Math.min(100, pct)}%"></div>`;
+    const wrapper = el('div');
+    wrapper.appendChild(d);
+    wrapper.appendChild(bar);
+    return wrapper;
+  }
+  d.innerHTML = `<span class="label">${label}</span><span class="value">${value}</span>`;
+  return d;
+}
+
+async function renderBoard() {
+  try {
+    const resp = await fetch('/api/board');
+    const tasks = await resp.json();
+    document.getElementById('boardCount').textContent = tasks.length + ' tasks';
+
+    const cols = { pending: [], in_progress: [], done: [] };
+    for (const t of tasks) {
+      const s = t.status || 'pending';
+      if (!cols[s]) cols[s] = [];
+      cols[s].push(t);
+    }
+
+    const labels = { pending: '⏳ Pending', in_progress: '🔧 In Progress', done: '✅ Done' };
+    const bc = document.getElementById('boardContent');
+    bc.innerHTML = '';
+
+    for (const [status, items] of Object.entries(cols)) {
+      const col = el('div', 'task-col');
+      col.innerHTML = `<h3>${labels[status] || status} (${items.length})</h3>`;
+      for (const t of items) {
+        const card = el('div', 'task-card');
+        card.innerHTML = `
+          <div class="task-title">${t.title}</div>
+          <div class="task-meta">
+            <span class="priority-${t.priority}">● ${t.priority}</span>
+            ${t.notes ? ' · ' + t.notes.slice(0, 60) : ''}
+          </div>
+        `;
+        col.appendChild(card);
+      }
+      bc.appendChild(col);
+    }
+  } catch (e) {
+    console.error('Board fetch failed:', e);
+  }
+}
+
+// --- Initial load + SSE ---
+async function init() {
+  // Load initial snapshot
+  try {
+    const resp = await fetch('/api/snapshot');
+    const data = await resp.json();
+    renderSnapshot(data);
+  } catch (e) {
+    console.error('Initial snapshot failed:', e);
+  }
+
+  // Connect SSE
+  connectSSE();
+}
+
+function connectSSE() {
+  if (sse) sse.close();
+  sse = new EventSource('/events');
+
+  sse.onopen = () => {
+    document.getElementById('sseDot').className = 'sse-dot live';
+    document.getElementById('sseLabel').textContent = 'Live';
+  };
+
+  sse.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      renderSnapshot(data);
+    } catch (err) {
+      console.error('SSE parse error:', err);
+    }
+  };
+
+  sse.onerror = () => {
+    document.getElementById('sseDot').className = 'sse-dot';
+    document.getElementById('sseLabel').textContent = 'Reconnecting...';
+    // EventSource auto-reconnects
+  };
+}
+
+init();
+</script>
+</body>
+</html>

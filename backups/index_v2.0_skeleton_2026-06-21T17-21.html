@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes AgentOS — Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════ DESIGN TOKENS ═══════════ */
+  :root {
+    --bg-base: #15151F;
+    --bg-glass: rgba(31,31,43,0.55);
+    --border-glass: rgba(255,255,255,0.1);
+    --text-primary: #F4F4F8;
+    --text-muted: #8A8A9B;
+    --brand-violet: #8B5CF6;
+    --brand-violet-glow: #A78BFA;
+    --brand-cyan: #7DD3FC;
+    --brand-mint: #5EE2B5;
+    --brand-amber: #F5B544;
+    --brand-red: #F26D6D;
+    --brand-pink: #F472B6;
+    --brand-gold: #FBBF24;
+    --brand-magenta: #E879F9;
+    --brand-teal: #2DD4BF;
+    --agent-orchestrator: var(--brand-violet-glow);
+    --agent-analyst: var(--brand-cyan);
+    --agent-writer: var(--brand-pink);
+    --agent-marketer: var(--brand-magenta);
+    --agent-coder: var(--brand-teal);
+    --agent-infra: var(--brand-amber);
+    --agent-executor: var(--brand-mint);
+    --agent-sentinel: var(--brand-red);
+    --agent-web: var(--brand-gold);
+    --agent-publisher: var(--brand-violet);
+    --agent-reviewer: #6EE7B7;
+    --status-active: var(--brand-mint);
+    --status-idle: var(--brand-amber);
+    --status-dormant: var(--text-muted);
+    --status-success: var(--brand-mint);
+    --status-error: var(--brand-red);
+    --status-warning: var(--brand-amber);
+    --font-display: 'Inter Tight', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-size-xs: 10px;
+    --font-size-sm: 12px;
+    --font-size-base: 14px;
+    --font-size-lg: 18px;
+    --font-size-xl: 22px;
+    --font-size-2xl: clamp(36px, 4vw, 60px);
+    --font-size-3xl: clamp(34px, 4vw, 56px);
+    --letter-spacing-wide: 0.15em;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --space-4: 24px;
+    --space-5: 32px;
+    --space-6: 48px;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 999px;
+    --blur-light: blur(4px);
+    --blur-medium: blur(8px);
+    --blur-heavy: blur(16px);
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+  }
+
+  /* ── Reset & Base ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Ambient Background ── */
+  .bg-orb {
+    position: fixed; inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .bg-orb::before,
+  .bg-orb::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.5;
+  }
+  .bg-orb::before {
+    width: 600px; height: 600px;
+    top: -10%; left: -5%;
+    background: radial-gradient(circle, rgba(139,92,246,0.35), transparent 70%);
+    animation: float-orb 12s ease-in-out infinite alternate;
+  }
+  .bg-orb::after {
+    width: 500px; height: 500px;
+    bottom: -15%; right: -5%;
+    background: radial-gradient(circle, rgba(125,211,252,0.25), transparent 70%);
+    animation: float-orb 15s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes float-orb {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, 20px) scale(1.05); }
+  }
+  .bg-grid {
+    position: fixed; inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* ── Top Nav Bar (Glass) ── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-2) var(--space-4);
+    background: rgba(21, 21, 31, 0.5);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+  }
+
+  /* Brand */
+  .brand { display: flex; align-items: center; gap: var(--space-2); }
+  .brand-mark {
+    position: relative;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--brand-violet), var(--brand-cyan), var(--brand-mint), var(--brand-violet));
+    box-shadow: 0 0 16px rgba(139,92,246,0.4), 0 0 40px rgba(139,92,246,0.15);
+    animation: spin-ring 8s linear infinite;
+  }
+  @keyframes spin-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .brand-inner {
+    position: absolute; inset: 4px;
+    border-radius: 50%;
+    background: var(--bg-base);
+  }
+  .brand-dot {
+    position: absolute;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--brand-mint);
+    z-index: 2;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 4px 2px rgba(94,226,181,0.4); transform: scale(1); }
+    50% { box-shadow: 0 0 10px 6px rgba(94,226,181,0.15); transform: scale(1.15); }
+  }
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: var(--font-size-lg);
+    background: linear-gradient(135deg, var(--brand-violet-glow), var(--brand-cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Tab Pill Row */
+  .tab-row {
+    display: flex; align-items: center; gap: 2px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-full);
+    padding: 3px;
+  }
+  .tab-btn {
+    padding: var(--space-1) var(--space-3);
+    border: none; background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+  .tab-btn.active {
+    background: rgba(255,255,255,0.92);
+    color: var(--bg-base);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  /* Nav Right */
+  .nav-right { display: flex; align-items: center; gap: var(--space-3); }
+  .status-pill {
+    display: flex; align-items: center; gap: var(--space-1);
+    padding: 5px var(--space-2);
+    background: rgba(94,226,181,0.1);
+    border: 1px solid rgba(94,226,181,0.25);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: var(--brand-mint);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand-mint);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  .nav-clock {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Main Content Area ── */
+  .main {
+    position: relative; z-index: 1;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: var(--space-4);
+  }
+
+  /* Tab Panels */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Glass Card */
+  .glass-card {
+    background: rgba(31,31,43,0.5);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* Empty state placeholder */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 400px;
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+    gap: var(--space-2);
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .nav { flex-wrap: wrap; gap: var(--space-2); }
+    .tab-row { order: 3; width: 100%; overflow-x: auto; }
+    .brand-name { font-size: var(--font-size-base); }
+    .status-pill span.label-text { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ AMBIENT BACKGROUND ═══════════ -->
+<div class="bg-orb"></div>
+<div class="bg-grid"></div>
+
+<!-- ═══════════ NAV BAR ═══════════ -->
+<nav class="nav">
+  <div class="brand">
+    <div class="brand-mark">
+      <div class="brand-ring"></div>
+      <div class="brand-inner"></div>
+      <div class="brand-dot"></div>
+    </div>
+    <span class="brand-name">Hermes AgentOS</span>
+    <span class="badge" style="background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid rgba(255,255,255,0.1);padding:2px 8px;border-radius:var(--radius-full);font-size:var(--font-size-xs);font-weight:500;letter-spacing:var(--letter-spacing-wide);text-transform:uppercase;">v2.0</span>
+  </div>
+  <div class="tab-row" id="tabRow">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="agents">Agents</button>
+    <button class="tab-btn" data-tab="tasks">Tasks</button>
+    <button class="tab-btn" data-tab="schedule">Schedule</button>
+    <button class="tab-btn" data-tab="content">Content</button>
+  </div>
+  <div class="nav-right">
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      <span class="label-text">All systems operational</span>
+    </div>
+    <span class="nav-clock" id="navClock">--:--:--</span>
+  </div>
+</nav>
+
+<!-- ═══════════ MAIN CONTENT ═══════════ -->
+<div class="main">
+  <div class="tab-panel active" id="panel-overview">
+    <div class="glass-card"><div class="empty-state"><div class="icon">📊</div><div>Overview — real-time system radar</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 23 builds this panel</div></div></div>
+  </div>
+  <div class="tab-panel" id="panel-agents">
+    <div class="glass-card"><div class="empty-state"><div class="icon">🤖</div><div>Agents — 11-card grid + activity</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 24–25 build this panel</div></div></div>
+  </div>
+  <div class="tab-panel" id="panel-tasks">
+    <div class="glass-card"><div class="empty-state"><div class="icon">✅</div><div>Tasks — live kanban board</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 26 builds this panel</div></div></div>
+  </div>
+  <div class="tab-panel" id="panel-schedule">
+    <div class="glass-card"><div class="empty-state"><div class="icon">⏰</div><div>Schedule — cron jobs + timeline</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 27 builds this panel</div></div></div>
+  </div>
+  <div class="tab-panel" id="panel-content">
+    <div class="glass-card"><div class="empty-state"><div class="icon">📁</div><div>Content — documents + storage</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 28–29 build this panel</div></div></div>
+  </div>
+</div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script>
+  // ── Component Factories ──
+  const GlassCard = (children, cls) => '<div class="glass-card ' + (cls||'') + '">' + children + '</div>';
+
+  // ── Tab Switching ──
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Live Clock ──
+  function updateClock() {
+    document.getElementById('navClock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+</body>
+</html>

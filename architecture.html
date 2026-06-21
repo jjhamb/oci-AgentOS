@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes AgentOS — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a1a; color: #e0e0e0; font-family: 'Inter', sans-serif; padding: 40px; min-height: 100vh; }
+  h1 { text-align: center; color: #00d4ff; font-size: 28px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 40px; }
+
+  .hierarchy { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .node {
+    border: 2px solid;
+    border-radius: 12px;
+    padding: 14px 24px;
+    text-align: center;
+    min-width: 160px;
+    position: relative;
+  }
+  .node .name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .node .role { font-size: 11px; color: #888; margin-bottom: 6px; }
+  .node .status { font-size: 11px; font-weight: 600; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .green { background: #10b981; }
+  .yellow { background: #f59e0b; }
+  .red { background: #ef4444; }
+  .gray { background: #6b7280; }
+  .blue { background: #3b82f6; }
+
+  /* Orchestrator */
+  .orchestrator { border-color: #7c3aed; background: rgba(124, 58, 237, 0.1); }
+  .orchestrator .name { color: #a78bfa; }
+
+  /* Specialists */
+  .specialist { border-color: #0ea5e9; background: rgba(14, 165, 233, 0.08); }
+  .specialist .name { color: #38bdf8; }
+
+  /* Infra */
+  .infra { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+  .infra .name { color: #fbbf24; }
+
+  /* Workers */
+  .worker { border-color: #6b7280; background: rgba(107, 114, 128, 0.08); }
+  .worker .name { color: #9ca3af; }
+
+  /* Connector lines */
+  .connector-v {
+    width: 2px;
+    height: 30px;
+    background: linear-gradient(to bottom, #7c3aed, #0ea5e9);
+    margin: 0 auto;
+  }
+  .connector-v-infra {
+    width: 2px;
+    height: 30px;
+    background: linear-gradient(to bottom, #7c3aed, #f59e0b);
+    margin: 0 auto;
+  }
+  .connector-v-worker {
+    width: 2px;
+    height: 24px;
+    background: linear-gradient(to bottom, #f59e0b, #6b7280);
+    margin: 0 auto;
+  }
+
+  .children-row {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-start;
+    position: relative;
+  }
+  .children-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 120px);
+    height: 2px;
+    background: linear-gradient(to right, transparent, #0ea5e9 20%, #0ea5e9 50%, #f59e0b 50%, #f59e0b 80%, transparent);
+    display: none;
+  }
+
+  .child-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #555;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .legend {
+    margin-top: 40px;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; }
+
+  .pipeline {
+    margin-top: 40px;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    background: rgba(255,255,255,0.02);
+  }
+  .pipeline h2 { font-size: 14px; color: #00d4ff; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 2px; }
+  .pipeline-stages { display: flex; gap: 16px; justify-content: center; align-items: center; }
+  .stage { border: 1px solid #334155; border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 140px; }
+  .stage .label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+  .stage .count { font-size: 20px; font-weight: 700; color: #e2e8f0; }
+  .arrow { color: #475569; font-size: 24px; }
+
+  .rules {
+    margin-top: 40px;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    background: rgba(255,255,255,0.02);
+  }
+  .rules h2 { font-size: 14px; color: #a78bfa; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 2px; }
+  .rules ul { list-style: none; }
+  .rules li { font-size: 13px; color: #94a3b8; padding: 6px 0; border-bottom: 1px solid #1e293b; }
+  .rules li:last-child { border-bottom: none; }
+  .rules li strong { color: #e2e8f0; }
+</style>
+</head>
+<body>
+
+<h1>HERMES AGENTOS — Architecture</h1>
+<p class="subtitle">Single Hierarchy · One Controller · Shared Specialists</p>
+
+<div class="hierarchy">
+
+  <!-- Owner -->
+  <div class="node" style="border-color: #00d4ff; background: rgba(0,212,255,0.08); margin-bottom: 0;">
+    <div class="name" style="color: #00d4ff;">CAPT JHAMB</div>
+    <div class="role">Owner · Telegram / WhatsApp / TUI</div>
+    <div class="status"><span class="status-dot green"></span>Highest Authority</div>
+  </div>
+
+  <div class="connector-v" style="background: linear-gradient(to bottom, #00d4ff, #7c3aed);"></div>
+
+  <!-- Orchestrator -->
+  <div class="node orchestrator">
+    <div class="name">ORCHESTRATOR</div>
+    <div class="role">Default Profile · Single Gateway</div>
+    <div class="status"><span class="status-dot green"></span>Active</div>
+  </div>
+
+  <div class="connector-v" style="background: linear-gradient(to bottom, #7c3aed, #0ea5e9);"></div>
+
+  <!-- Level 2: Specialists + Infra -->
+  <div class="children-row">
+
+    <!-- Analyst -->
+    <div class="child-col">
+      <div class="section-label">Specialists</div>
+      <div class="node specialist">
+        <div class="name">ANALYST</div>
+        <div class="role">Research · Analysis · Intel</div>
+        <div class="status"><span class="status-dot green"></span>Active</div>
+      </div>
+    </div>
+
+    <!-- Writer -->
+    <div class="child-col">
+      <div class="node specialist">
+        <div class="name">WRITER</div>
+        <div class="role">Content · SEO · Copy</div>
+        <div class="status"><span class="status-dot yellow"></span>Idle</div>
+      </div>
+    </div>
+
+    <!-- Marketer -->
+    <div class="child-col">
+      <div class="node specialist">
+        <div class="name">MARKETER</div>
+        <div class="role">Strategy · Growth · Campaigns</div>
+        <div class="status"><span class="status-dot green"></span>Active</div>
+      </div>
+    </div>
+
+    <!-- Coder -->
+    <div class="child-col">
+      <div class="node specialist">
+        <div class="name">CODER</div>
+        <div class="role">Development · Automation</div>
+        <div class="status"><span class="status-dot gray"></span>Dormant</div>
+      </div>
+    </div>
+
+    <!-- Infra -->
+    <div class="child-col">
+      <div class="section-label">Infrastructure</div>
+      <div class="node infra" style="margin-top: 20px;">
+        <div class="name">INFRA</div>
+        <div class="role">Servers · SSH · AWS/OCI</div>
+        <div class="status"><span class="status-dot green"></span>Active</div>
+      </div>
+
+      <div class="connector-v-worker"></div>
+
+      <!-- Infra's workers -->
+      <div class="children-row" style="gap: 12px; margin-top: 0;">
+        <div class="child-col">
+          <div class="node worker" style="min-width: 100px; padding: 10px 14px;">
+            <div class="name" style="font-size: 12px;">EXECUTOR</div>
+            <div class="role" style="font-size: 10px;">Runbooks</div>
+            <div class="status" style="font-size: 10px;"><span class="status-dot green"></span>Active</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 100px; padding: 10px 14px;">
+            <div class="name" style="font-size: 12px;">SENTINEL</div>
+            <div class="role" style="font-size: 10px;">Monitoring</div>
+            <div class="status" style="font-size: 10px;"><span class="status-dot red"></span>Alert</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 100px; padding: 10px 14px;">
+            <div class="name" style="font-size: 12px;">WEB</div>
+            <div class="role" style="font-size: 10px;">Apache · SSL</div>
+            <div class="status" style="font-size: 10px;"><span class="status-dot yellow"></span>Idle</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 100px; padding: 10px 14px;">
+            <div class="name" style="font-size: 12px;">PUBLISHER</div>
+            <div class="role" style="font-size: 10px;">Deployment</div>
+            <div class="status" style="font-size: 10px;"><span class="status-dot green"></span>Active</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 100px; padding: 10px 14px;">
+            <div class="name" style="font-size: 12px;">REVIEWER</div>
+            <div class="role" style="font-size: 10px;">QA · Checks</div>
+            <div class="status" style="font-size: 10px;"><span class="status-dot gray"></span>Dormant</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><span class="status-dot green"></span> Active</div>
+  <div class="legend-item"><span class="status-dot yellow"></span> Idle</div>
+  <div class="legend-item"><span class="status-dot red"></span> Alert</div>
+  <div class="legend-item"><span class="status-dot gray"></span> Dormant</div>
+  <div class="legend-item"><span class="status-dot blue"></span> Sub-agent</div>
+</div>
+
+<!-- Pipeline -->
+<div class="pipeline">
+  <h2>Shared Pipeline</h2>
+  <div class="pipeline-stages">
+    <div class="stage">
+      <div class="label">PENDING</div>
+      <div class="count">3</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <div class="label">IN-PROGRESS</div>
+      <div class="count">1</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <div class="label">DONE</div>
+      <div class="count">12</div>
+    </div>
+  </div>
+</div>
+
+<!-- Rules -->
+<div class="rules">
+  <h2>Operating Rules</h2>
+  <ul>
+    <li><strong>Single Controller:</strong> Orchestrator is the only controller. Infra is a delegated worker, not a peer.</li>
+    <li><strong>Shared Specialists:</strong> Analyst, Writer, Marketer, Coder are ONE instance each. Infra requests them through Orchestrator — never spawns duplicates.</li>
+    <li><strong>No Duplicate Tasks:</strong> All shared tasks go through Orchestrator's single instance of each specialist.</li>
+    <li><strong>Infra's Workers:</strong> Executor, Sentinel, Web, Publisher, Reviewer are profiles under Infra's coordination.</li>
+    <li><strong>Shared Pipeline:</strong> Bottom bar shows ALL tasks flowing through the system, regardless of who requested them.</li>
+    <li><strong>Communication:</strong> Profiles communicate via shared filesystem (<code>/opt/data/workspace/tasks/</code>), not separate gateways.</li>
+    <li><strong>One Gateway:</strong> Only the default profile (Orchestrator) runs a gateway process. All other profiles are gateway-free.</li>
+  </ul>
+</div>
+
+</body>
+</html>

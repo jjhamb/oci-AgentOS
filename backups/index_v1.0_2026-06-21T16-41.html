@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes AgentOS — Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Ambient Background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      var(--orb-violet),
+      var(--orb-cyan),
+      var(--grid-pattern);
+    background-size: 100% 100%, 100% 100%, var(--grid-size) var(--grid-size);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Top Nav Bar ── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-2) var(--space-4);
+    background: rgba(21, 21, 31, 0.75);
+    backdrop-filter: var(--blur-heavy);
+    -webkit-backdrop-filter: var(--blur-heavy);
+    border-bottom: 1px solid var(--border-glass);
+  }
+
+  /* Brand */
+  .brand {
+    display: flex; align-items: center; gap: var(--space-2);
+  }
+  .brand-ring {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--brand-violet), var(--brand-cyan), var(--brand-mint), var(--brand-violet));
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .brand-ring::after {
+    content: '';
+    position: absolute; inset: 3px;
+    border-radius: 50%;
+    background: var(--bg-base);
+  }
+  .brand-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--brand-mint);
+    position: relative; z-index: 1;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(94,226,181,0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(94,226,181,0); }
+  }
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: var(--font-size-lg);
+    background: linear-gradient(135deg, var(--brand-violet-glow), var(--brand-cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Tab Pill Row */
+  .tab-row {
+    display: flex; align-items: center; gap: 2px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-full);
+    padding: 2px;
+  }
+  .tab-btn {
+    padding: var(--space-1) var(--space-3);
+    border: none; background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text-primary); }
+  .tab-btn.active {
+    background: rgba(255,255,255,0.95);
+    color: var(--bg-base);
+    font-weight: 600;
+  }
+
+  /* Nav Right */
+  .nav-right {
+    display: flex; align-items: center; gap: var(--space-3);
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: var(--space-1);
+    padding: 4px var(--space-2);
+    background: rgba(94,226,181,0.08);
+    border: 1px solid rgba(94,226,181,0.2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: var(--brand-mint);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand-mint);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  .nav-clock {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Main Content Area ── */
+  .main {
+    position: relative; z-index: 1;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: var(--space-4);
+  }
+
+  /* Tab Panels */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Placeholder for empty tabs */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 400px;
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+    gap: var(--space-2);
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .nav { flex-wrap: wrap; gap: var(--space-2); }
+    .tab-row { order: 3; width: 100%; overflow-x: auto; }
+    .brand-name { font-size: var(--font-size-base); }
+    .status-pill span.label-text { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ NAV BAR ═══════════ -->
+<nav class="nav">
+  <!-- Brand -->
+  <div class="brand">
+    <div class="brand-ring"><div class="brand-dot"></div></div>
+    <span class="brand-name">Hermes AgentOS</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-row" id="tabRow">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="agents">Agents</button>
+    <button class="tab-btn" data-tab="tasks">Tasks</button>
+    <button class="tab-btn" data-tab="schedule">Schedule</button>
+    <button class="tab-btn" data-tab="content">Content</button>
+  </div>
+
+  <!-- Right side -->
+  <div class="nav-right">
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      <span class="label-text">All systems operational</span>
+    </div>
+    <span class="nav-clock" id="navClock">--:--:--</span>
+  </div>
+</nav>
+
+<!-- ═══════════ MAIN CONTENT ═══════════ -->
+<div class="main">
+
+  <!-- Overview Tab -->
+  <div class="tab-panel active" id="panel-overview">
+    <div class="empty-state">
+      <div class="icon">📊</div>
+      <div>Overview — real-time system radar</div>
+      <div style="font-size: var(--font-size-xs); opacity: 0.6;">Prompt 23 builds this panel</div>
+    </div>
+  </div>
+
+  <!-- Agents Tab -->
+  <div class="tab-panel" id="panel-agents">
+    <div class="empty-state">
+      <div class="icon">🤖</div>
+      <div>Agents — 11-card grid + activity</div>
+      <div style="font-size: var(--font-size-xs); opacity: 0.6;">Prompts 24–25 build this panel</div>
+    </div>
+  </div>
+
+  <!-- Tasks Tab -->
+  <div class="tab-panel" id="panel-tasks">
+    <div class="empty-state">
+      <div class="icon">✅</div>
+      <div>Tasks — live kanban board</div>
+      <div style="font-size: var(--font-size-xs); opacity: 0.6;">Prompt 26 builds this panel</div>
+    </div>
+  </div>
+
+  <!-- Schedule Tab -->
+  <div class="tab-panel" id="panel-schedule">
+    <div class="empty-state">
+      <div class="icon">⏰</div>
+      <div>Schedule — cron jobs + timeline</div>
+      <div style="font-size: var(--font-size-xs); opacity: 0.6;">Prompt 27 builds this panel</div>
+    </div>
+  </div>
+
+  <!-- Content Tab -->
+  <div class="tab-panel" id="panel-content">
+    <div class="empty-state">
+      <div class="icon">📁</div>
+      <div>Content — documents + storage</div>
+      <div style="font-size: var(--font-size-xs); opacity: 0.6;">Prompts 28–29 build this panel</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script src="components.js"></script>
+<script>
+  // ── Tab Switching ──
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      tabBtns.forEach(b => b.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + target).classList.add('active');
+    });
+  });
+
+  // ── Live Clock ──
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('navClock').textContent =
+      now.toLocaleTimeString('en-US', { hour12: false });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
