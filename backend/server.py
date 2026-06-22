@@ -4,6 +4,7 @@ Hermes AgentOS — Mission Control Dashboard Backend
 Read-only monitoring server on 127.0.0.1:51763
 """
 
+import base64
 import json
 import os
 import re
@@ -1262,6 +1263,16 @@ def terminal_exec(command, cwd="/home/jayant"):
 
 
 # ---------------------------------------------------------------------------
+# Content file browser API
+# ---------------------------------------------------------------------------
+from content_api import (
+    content_safe_path,
+    content_list_directory,
+    content_get_file,
+    content_save_file,
+)
+
+# ---------------------------------------------------------------------------
 # Hermes Chat Session (tmux-backed)
 # ---------------------------------------------------------------------------
 HERMES_SESSION_NAME = "dashboard_hermes"
@@ -1298,7 +1309,6 @@ def hermes_session_send(command):
             capture_output=True, timeout=5
         )
         # Wait for response
-        import time
         time.sleep(3)
         # Capture output
         result = subprocess.run(
@@ -1407,6 +1417,59 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, cron_data())
             return
 
+        # Content - file browser API
+        if path == "/api/content/list":
+            qs = parse_qs(parsed.query)
+            dir_path = qs.get("path", ["/home/jayant"])[0]
+            safe = content_safe_path(dir_path)
+            if safe is None:
+                self._send_json(403, {"error": "access denied"})
+                return
+            if not os.path.isdir(safe):
+                self._send_json(404, {"error": "not found"})
+                return
+            entries = content_list_directory(safe)
+            if entries is None:
+                self._send_json(403, {"error": "permission denied"})
+                return
+            self._send_json(200, {"path": safe, "entries": entries})
+            return
+
+        if path == "/api/content/get":
+            qs = parse_qs(parsed.query)
+            file_path = qs.get("path", [None])[0]
+            if not file_path:
+                self._send_json(400, {"error": "missing path"})
+                return
+            safe = content_safe_path(file_path)
+            if safe is None:
+                self._send_json(403, {"error": "access denied"})
+                return
+            if not os.path.isfile(safe):
+                self._send_json(404, {"error": "not found"})
+                return
+            result = content_get_file(safe)
+            self._send_json(200, result)
+            return
+
+        if path == "/api/content/download":
+            qs = parse_qs(parsed.query)
+            file_path = qs.get("path", [None])[0]
+            if not file_path:
+                self._send_json(400, {"error": "missing path"})
+                return
+            safe = content_safe_path(file_path)
+            if safe is None or not os.path.isfile(safe):
+                self._send_json(404, {"error": "not found"})
+                return
+            try:
+                with open(safe, "rb") as f:
+                    data = f.read()
+                self._send(200, data, "application/octet-stream")
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
         # Live activity feed (last N entries)
         if path == "/api/activity/live":
             qs = parse_qs(parsed.query)
@@ -1477,6 +1540,25 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/terminal/hermes/status":
             alive = hermes_session_status()
             self._send_json(200, {"alive": alive})
+            return
+
+        # Content - save file
+        if path == "/api/content/save":
+            try:
+                body = self._read_body()
+                file_path = body.get("path", "")
+                content = body.get("content", "")
+                if not file_path:
+                    self._send_json(400, {"error": "missing path"})
+                    return
+                safe = content_safe_path(file_path)
+                if safe is None:
+                    self._send_json(403, {"error": "access denied"})
+                    return
+                result = content_save_file(safe, content)
+                self._send_json(200, result)
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
             return
 
         # Create task
@@ -1584,6 +1666,9 @@ def main():
     print(f"  GET  /events     → SSE stream (5s updates)")
     print(f"  GET  /api/board  → list tasks")
     print(f"  GET  /api/cron  → cron jobs (system + Hermes)")
+    print(f"  GET  /api/content/list  → list directory")
+    print(f"  GET  /api/content/get  → read file")
+    print(f"  GET  /api/content/download  → download file")
     print(f"  POST /api/board  → create task")
     print(f"  POST /api/board/update?id= → update task")
     print(f"  POST /api/board/delete?id= → delete task")
