@@ -575,9 +575,54 @@ def cron_jobs():
     except Exception as e:
         jobs.append({"source": cron_d, "label": "system", "error": str(e)})
 
-    # Note: Hermes-managed cron jobs live in ~/.hermes/cron/ as JSON
-    # and are tracked via the Hermes CLI — not parsed here since they
-    # aren't standard crontab format.
+    return jobs
+
+
+def cron_data():
+    """Return combined system + Hermes cron jobs for the API."""
+    jobs = cron_jobs()
+
+    # Parse Hermes cron jobs from ~/.hermes/cron/jobs.json
+    hermes_cron_path = os.path.expanduser("~/.hermes/cron/jobs.json")
+    try:
+        with open(hermes_cron_path) as f:
+            hermes_data = json.load(f)
+    except Exception:
+        hermes_data = {"jobs": []}
+
+    for j in hermes_data.get("jobs", []):
+        schedule = j.get("schedule", {})
+        if schedule.get("kind") == "interval":
+            mins = schedule.get("minutes", 0)
+            display = schedule.get("display", f"every {mins}m")
+            schedule_english = f"Every {mins} minutes"
+        elif schedule.get("kind") == "cron":
+            expr = schedule.get("expr", "")
+            display = schedule.get("display", expr)
+            schedule_english = _schedule_to_english(expr)
+        else:
+            display = schedule.get("display", "unknown")
+            schedule_english = ""
+
+        prompt_text = j.get("prompt", "")
+        # Strip the "You are the X profile..." prefix for display
+        if " " in prompt_text:
+            # Use the first sentence or first 80 chars
+            short_cmd = prompt_text[:120]
+        else:
+            short_cmd = prompt_text[:120]
+
+        jobs.append({
+            "source": "hermes",
+            "label": "hermes",
+            "name": j.get("name", "Untitled"),
+            "schedule_raw": display,
+            "schedule_english": schedule_english,
+            "command": short_cmd,
+            "enabled": j.get("enabled", True),
+            "last_status": j.get("last_status"),
+            "owner": "hermes",
+        })
 
     return jobs
 
@@ -1357,6 +1402,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, kanban_data())
             return
 
+        # Cron jobs (system + Hermes)
+        if path == "/api/cron":
+            self._send_json(200, cron_data())
+            return
+
         # Live activity feed (last N entries)
         if path == "/api/activity/live":
             qs = parse_qs(parsed.query)
@@ -1533,6 +1583,7 @@ def main():
     print(f"  GET  /api/snapshot → full JSON snapshot")
     print(f"  GET  /events     → SSE stream (5s updates)")
     print(f"  GET  /api/board  → list tasks")
+    print(f"  GET  /api/cron  → cron jobs (system + Hermes)")
     print(f"  POST /api/board  → create task")
     print(f"  POST /api/board/update?id= → update task")
     print(f"  POST /api/board/delete?id= → delete task")

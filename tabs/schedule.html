@@ -414,16 +414,13 @@
     const systemCount = document.getElementById('count-system');
 
     // Separate hermes vs system jobs
-    // Hermes jobs: from jobs.json (source contains .json or label=hermes)
-    // System jobs: from /etc/crontab, /etc/cron.d, etc.
     const hermesJobs = [];
     const systemJobs = [];
 
     jobs.forEach(job => {
       if (job.error) {
-        // Permission errors etc — show in system
         systemJobs.push(job);
-      } else if (job.source && (job.source.endsWith('.json') || job.label === 'hermes')) {
+      } else if (job.label === 'hermes' || job.source === 'hermes') {
         hermesJobs.push(job);
       } else {
         systemJobs.push(job);
@@ -434,13 +431,13 @@
     systemCount.textContent = systemJobs.length;
 
     if (hermesJobs.length === 0) {
-      hermesEl.innerHTML = '<div class="schedule-empty">No scheduled jobs in this group.</div>';
+      hermesEl.innerHTML = '<div class="schedule-empty">No Hermes jobs configured.</div>';
     } else {
       hermesEl.innerHTML = hermesJobs.map(job => buildJobCard(job, 'hermes')).join('');
     }
 
     if (systemJobs.length === 0) {
-      systemEl.innerHTML = '<div class="schedule-empty">No scheduled jobs in this group.</div>';
+      systemEl.innerHTML = '<div class="schedule-empty">No system cron jobs found.</div>';
     } else {
       systemEl.innerHTML = systemJobs.map(job => buildJobCard(job, 'system')).join('');
     }
@@ -462,14 +459,24 @@
     const ownerClass = type === 'hermes' ? 'job-owner-hermes' : 'job-owner-system';
     const ownerLabel = type === 'hermes' ? 'HERMES' : 'SYSTEM';
 
+    // Hermes jobs have a name field; system jobs have command only
+    const commandDisplay = job.name || job.command || '';
+    const statusBadge = job.last_status
+      ? `<span class="job-schedule-badge" style="margin-left:4px;color:var(--brand-mint)">✓ ${escapeHtml(job.last_status)}</span>`
+      : '';
+    const enabledBadge = job.enabled === false
+      ? `<span class="job-schedule-badge" style="margin-left:4px;color:var(--brand-red)">DISABLED</span>`
+      : '';
+
     return `<div class="job-card">
       <div class="job-card-header">
-        <div class="job-command" title="${escapeHtml(job.command)}">${escapeHtml(job.command)}</div>
+        <div class="job-command" title="${escapeHtml(commandDisplay)}">${escapeHtml(commandDisplay)}</div>
         <span class="job-owner-badge ${ownerClass}">${ownerLabel}</span>
       </div>
       <div class="job-card-schedule">
         <span class="job-schedule-badge">${escapeHtml(job.schedule_raw || '—')}</span>
         <span class="job-schedule-english">${escapeHtml(job.schedule_english || '')}</span>
+        ${statusBadge}${enabledBadge}
       </div>
       <div class="job-source">${escapeHtml(job.source)}</div>
     </div>`;
