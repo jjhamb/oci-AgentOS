@@ -355,15 +355,10 @@
       <!-- Quick Actions -->
       <div class="terminal-quickbar">
         <span class="quick-label">Quick:</span>
-        <button class="quick-btn quick-btn-success" data-cmd="systemctl status apache2">🖥️ Apache</button>
-        <button class="quick-btn quick-btn-success" data-cmd="systemctl status postfix">📧 Postfix</button>
         <button class="quick-btn quick-btn-success" data-cmd="df -h && free -h && uptime">📊 System</button>
+        <button class="quick-btn quick-btn-success" data-cmd="ps aux | grep hermes | grep -v grep">🔍 Hermes Procs</button>
         <div class="quick-sep"></div>
-        <button class="quick-btn quick-btn-brand" data-cmd="cd /home/jayant/Desktop/Hermes-AgentOS-Dashboard/backend && python3 -B server.py &">🔄 Restart Server</button>
-        <button class="quick-btn quick-btn-brand" data-cmd="nano /home/jayant/.hermes/config.yaml">✏️ Edit Config</button>
-        <div class="quick-sep"></div>
-        <button class="quick-btn" data-cmd="mc">📂 MC</button>
-        <button class="quick-btn quick-btn-brand" data-cmd="cd /home/jayant && hermes">💬 Hermes Chat</button>
+        <button class="quick-btn quick-btn-brand" id="hermesChatBtn">💬 Hermes Chat</button>
         <div class="quick-sep"></div>
         <button class="quick-btn quick-btn-danger" data-cmd="clear">🧹 Clear</button>
       </div>
@@ -418,6 +413,8 @@
   let terminalHistory = [];
   let historyIndex = -1;
   let currentCwd = '/home/jayant';
+  let hermesMode = false;
+  let hermesSessionAlive = false;
 
   const outputEl = document.getElementById('terminalOutput');
   const inputEl = document.getElementById('terminalInput');
@@ -447,7 +444,36 @@
     terminalHistory.push(cmd);
     historyIndex = terminalHistory.length;
 
-    // Display command
+    // Hermes mode: route to Hermes session
+    if (hermesMode) {
+      if (cmd.trim() === '/exit') {
+        document.getElementById('hermesChatBtn').click();
+        return;
+      }
+      appendOutput(`hermes> ${cmd}`, 'output-cmd');
+      statusDot.className = 'terminal-status-dot status-disconnected';
+      statusText.textContent = 'Hermes thinking…';
+
+      fetch('/api/terminal/hermes/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.output) appendOutput(data.output, 'output-success');
+        statusDot.className = 'terminal-status-dot status-connected';
+        statusText.textContent = 'Hermes Active';
+      })
+      .catch(err => {
+        appendOutput(`Error: ${err.message}`, 'output-err');
+        statusDot.className = 'terminal-status-dot status-disconnected';
+        statusText.textContent = 'Error';
+      });
+      return;
+    }
+
+    // Normal shell mode: Display command
     appendOutput(`$ ${cmd}`, 'output-cmd');
 
     // Handle clear
@@ -538,6 +564,48 @@
       inputEl.focus();
       executeCommand(cmd);
     });
+  });
+
+  // ── Hermes Chat Mode ──
+  const hermesBtn = document.getElementById('hermesChatBtn');
+  hermesBtn.addEventListener('click', async () => {
+    if (!hermesMode) {
+      // Start Hermes session
+      hermesBtn.textContent = '⏳ Starting…';
+      hermesBtn.disabled = true;
+      try {
+        const resp = await fetch('/api/terminal/hermes/start', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          hermesMode = true;
+          hermesSessionAlive = true;
+          hermesBtn.textContent = '🔴 Exit Hermes';
+          hermesBtn.classList.add('quick-btn-danger');
+          hermesBtn.classList.remove('quick-btn-brand');
+          promptEl.textContent = 'hermes>';
+          statusText.textContent = 'Hermes Active';
+          appendOutput('Hermes chat session started. Type your message and press Enter.', 'output-success');
+          appendOutput('Type /exit to quit Hermes mode.\n', '');
+        } else {
+          appendOutput(`Failed to start Hermes: ${data.message}`, 'output-err');
+          hermesBtn.textContent = '💬 Hermes Chat';
+        }
+      } catch (err) {
+        appendOutput(`Error: ${err.message}`, 'output-err');
+        hermesBtn.textContent = '💬 Hermes Chat';
+      }
+      hermesBtn.disabled = false;
+    } else {
+      // Exit Hermes mode
+      hermesMode = false;
+      hermesSessionAlive = false;
+      hermesBtn.textContent = '💬 Hermes Chat';
+      hermesBtn.classList.remove('quick-btn-danger');
+      hermesBtn.classList.add('quick-btn-brand');
+      updatePrompt();
+      statusText.textContent = 'Connected';
+      appendOutput('\nExited Hermes chat mode.', 'output-success');
+    }
   });
 
   // Focus input on click anywhere in terminal

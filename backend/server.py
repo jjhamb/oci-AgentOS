@@ -1217,6 +1217,66 @@ def terminal_exec(command, cwd="/home/jayant"):
 
 
 # ---------------------------------------------------------------------------
+# Hermes Chat Session (tmux-backed)
+# ---------------------------------------------------------------------------
+HERMES_SESSION_NAME = "dashboard_hermes"
+HERMES_SESSION = None  # Will hold the tmux session name
+
+def hermes_session_create():
+    """Create a new tmux session running Hermes chat."""
+    global HERMES_SESSION
+    try:
+        # Kill any existing session
+        subprocess.run(
+            ["tmux", "kill-session", "-t", HERMES_SESSION_NAME],
+            capture_output=True, timeout=5
+        )
+        # Create new tmux session with hermes
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", HERMES_SESSION_NAME, "-x", "120", "-y", "40",
+             "hermes"],
+            capture_output=True, timeout=10
+        )
+        HERMES_SESSION = HERMES_SESSION_NAME
+        return True, "Hermes session started"
+    except Exception as e:
+        return False, str(e)
+
+def hermes_session_send(command):
+    """Send a command to the Hermes tmux session and return output."""
+    if not HERMES_SESSION:
+        return "No active Hermes session. Click 'Hermes Chat' to start one."
+    try:
+        # Send the command
+        subprocess.run(
+            ["tmux", "send-keys", "-t", HERMES_SESSION, command, "Enter"],
+            capture_output=True, timeout=5
+        )
+        # Wait for response
+        import time
+        time.sleep(3)
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", HERMES_SESSION, "-p"],
+            capture_output=True, text=True, timeout=10
+        )
+        return result.stdout[-2000:]  # Last 2000 chars
+    except Exception as e:
+        return f"Error: {e}"
+
+def hermes_session_status():
+    """Check if Hermes tmux session is alive."""
+    try:
+        result = subprocess.run(
+            ["tmux", "has-session", "-t", HERMES_SESSION_NAME],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
@@ -1346,6 +1406,29 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(500, {"error": str(e)})
             return
 
+        # Hermes session create
+        if path == "/api/terminal/hermes/start":
+            ok, msg = hermes_session_create()
+            self._send_json(200 if ok else 500, {"ok": ok, "message": msg})
+            return
+
+        # Hermes session send
+        if path == "/api/terminal/hermes/send":
+            try:
+                body = self._read_body()
+                cmd = body.get("command", "")
+                output = hermes_session_send(cmd)
+                self._send_json(200, {"output": output})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
+        # Hermes session status
+        if path == "/api/terminal/hermes/status":
+            alive = hermes_session_status()
+            self._send_json(200, {"alive": alive})
+            return
+
         # Create task
         if path == "/api/board":
             try:
@@ -1454,6 +1537,9 @@ def main():
     print(f"  POST /api/board/update?id= → update task")
     print(f"  POST /api/board/delete?id= → delete task")
     print(f"  POST /api/terminal/exec → execute command")
+    print(f"  POST /api/terminal/hermes/start → start Hermes chat session")
+    print(f"  POST /api/terminal/hermes/send → send to Hermes session")
+    print(f"  POST /api/terminal/hermes/status → check Hermes session status")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
