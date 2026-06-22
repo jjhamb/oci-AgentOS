@@ -28,7 +28,7 @@ Thumbs.db
 
 # Snapshot copies (identical to backend/index.html)
 tabs/
-board.db
+backend/board.db
 
 # Legacy root-level duplicates (kept for reference only)
 index.html

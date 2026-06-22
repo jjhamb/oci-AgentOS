@@ -8,10 +8,9 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -114,9 +113,7 @@ def gateway_data():
 
 
 def activity_data():
-    """Query agent-logs.db for recent activity and per-agent stats.
-    Also injects synthetic 'running' entries from kanban tasks so the
-    Live Activity log and Overview feed show real-time kanban work."""
+    """Query agent-logs.db for recent activity and per-agent stats."""
     try:
         conn = sqlite3.connect(AGENT_LOGS_DB)
         conn.row_factory = sqlite3.Row
@@ -158,110 +155,6 @@ def activity_data():
             if row:
                 last_tasks[agent["agent_name"]] = {"task": row[0], "model": row[1]}
 
-        conn.close()
-
-        # Inject synthetic activity entries from kanban tasks
-        # This makes the Live Activity log and Overview feed show real-time work
-        try:
-            kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-            kconn.execute("PRAGMA query_only=1")
-            kconn.row_factory = sqlite3.Row
-            kcur = kconn.cursor()
-
-            # Running tasks → in_progress entries
-            kcur.execute("""
-                SELECT assignee, title, started_at
-                FROM tasks
-                WHERE status = 'running' AND assignee IS NOT NULL
-                ORDER BY started_at DESC
-            """)
-            for r in kcur.fetchall():
-                synth_desc = f"running: {r['title']}"
-                already = any(
-                    e["agent_name"] == r["assignee"] and e["task_description"] == synth_desc
-                    for e in recent
-                )
-                if not already:
-                    synth_entry = {
-                        "id": f"kanban-{r['assignee']}-running",
-                        "agent_name": r["assignee"],
-                        "task_description": synth_desc,
-                        "model_used": "",
-                        "status": "in_progress",
-                        "created_at": r["started_at"] if isinstance(r["started_at"], str) else (
-                            datetime.fromtimestamp(r["started_at"], tz=timezone.utc).isoformat()
-                            if r["started_at"] else datetime.now(timezone.utc).isoformat()
-                        ),
-                    }
-                    recent.insert(0, synth_entry)
-
-            # Recently completed tasks (last 2 hours) → completed entries
-            # These persist so the activity log shows the full lifecycle
-            kcur.execute("""
-                SELECT assignee, title, completed_at, started_at
-                FROM tasks
-                WHERE status = 'done' AND assignee IS NOT NULL
-                  AND completed_at IS NOT NULL
-                ORDER BY completed_at DESC
-                LIMIT 20
-            """)
-            for r in kcur.fetchall():
-                # Only include tasks completed in the last 2 hours
-                try:
-                    completed_ts = r["completed_at"]
-                    if isinstance(completed_ts, (int, float)):
-                        completed_dt = datetime.fromtimestamp(completed_ts, tz=timezone.utc)
-                    else:
-                        completed_dt = datetime.fromisoformat(str(completed_ts).replace("Z", "+00:00"))
-                    age = datetime.now(timezone.utc) - completed_dt
-                    if age > timedelta(hours=2):
-                        continue
-                except Exception:
-                    continue
-
-                synth_desc = f"completed: {r['title']}"
-                already = any(
-                    e["agent_name"] == r["assignee"] and e["task_description"] == synth_desc
-                    for e in recent
-                )
-                if not already:
-                    synth_entry = {
-                        "id": f"kanban-{r['assignee']}-done-{r['completed_at']}",
-                        "agent_name": r["assignee"],
-                        "task_description": synth_desc,
-                        "model_used": "",
-                        "status": "completed",
-                        "created_at": r["completed_at"] if isinstance(r["completed_at"], str) else (
-                            datetime.fromtimestamp(r["completed_at"], tz=timezone.utc).isoformat()
-                            if r["completed_at"] else datetime.now(timezone.utc).isoformat()
-                        ),
-                    }
-                    recent.insert(0, synth_entry)
-
-            kconn.close()
-
-        except Exception:
-            pass
-
-        # Sort all entries by created_at DESC so kanban-injected entries
-        # are properly interleaved with agent-logs entries in time order
-        def _parse_ts(ts):
-            if not ts:
-                return datetime.min.replace(tzinfo=timezone.utc)
-            if isinstance(ts, str):
-                try:
-                    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                except Exception:
-                    return datetime.min.replace(tzinfo=timezone.utc)
-            if isinstance(ts, (int, float)):
-                try:
-                    return datetime.fromtimestamp(ts, tz=timezone.utc)
-                except Exception:
-                    return datetime.min.replace(tzinfo=timezone.utc)
-            return datetime.min.replace(tzinfo=timezone.utc)
-
-        recent.sort(key=lambda e: _parse_ts(e.get("created_at")), reverse=True)
-
         agents = {}
         for a in agent_rows:
             lt = last_tasks.get(a["agent_name"], {})
@@ -274,19 +167,16 @@ def activity_data():
                 "model": lt.get("model", ""),
             }
 
-        # Overall totals (reconnect — conn was closed above)
-        conn2 = sqlite3.connect(AGENT_LOGS_DB)
-        conn2.row_factory = sqlite3.Row
-        cur2 = conn2.cursor()
-        cur2.execute("SELECT COUNT(*) FROM agent_logs")
-        total_logs = cur2.fetchone()[0]
-        cur2.execute("SELECT COUNT(*) FROM agent_logs WHERE status = 'completed'")
-        total_completed = cur2.fetchone()[0]
-        cur2.execute("SELECT COUNT(*) FROM agent_logs WHERE status = 'failed'")
-        total_failed = cur2.fetchone()[0]
+        # Overall totals
+        cur.execute("SELECT COUNT(*) FROM agent_logs")
+        total_logs = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status = 'completed'")
+        total_completed = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status = 'failed'")
+        total_failed = cur.fetchone()[0]
 
         # 7-day daily breakdown
-        cur2.execute("""
+        cur.execute("""
             SELECT
                 DATE(created_at) AS day,
                 COUNT(*) AS count,
@@ -297,9 +187,9 @@ def activity_data():
             GROUP BY day
             ORDER BY day ASC
         """)
-        daily = [dict(r) for r in cur2.fetchall()]
+        daily = [dict(r) for r in cur.fetchall()]
 
-        conn2.close()
+        conn.close()
         return {
             "recent": recent,
             "agents": agents,
@@ -646,7 +536,7 @@ AGENT_REGISTRY = {
 
 
 def agents_data():
-    """Return status for all 11 agents based on agent-logs.db activity + kanban."""
+    """Return status for all 11 agents based on agent-logs.db activity."""
     try:
         conn = sqlite3.connect(AGENT_LOGS_DB)
         conn.row_factory = sqlite3.Row
@@ -680,129 +570,6 @@ def agents_data():
 
         conn.close()
 
-        # Check Discord session activity per agent (via state.db)
-        # Maps agent names to their Discord channels
-        agent_discord_channels = {
-            "analyst": "1517738142738808932",
-            "writer": "1517738145620168799",
-            "marketer": "1517738148824875169",
-            "coder": "1517738152150827098",
-            "orchestrator": "1518146157833097216",
-            "infra": "1518146234530005052",
-        }
-        discord_session_active = {}  # agent_name → True if recent Discord activity
-        try:
-            sconn = sqlite3.connect(STATE_DB)
-            sconn.row_factory = sqlite3.Row
-            scur = sconn.cursor()
-            # Get recent Discord sessions (within 5 min)
-            now_ts = time.time()
-            five_min_ago = now_ts - 300
-            scur.execute("""
-                SELECT id, source, started_at, message_count, title, user_id
-                FROM sessions
-                WHERE source = 'discord'
-                  AND message_count > 0
-                  AND started_at > ?
-                ORDER BY started_at DESC
-                LIMIT 20
-            """, (five_min_ago,))
-            recent_discord_sessions = scur.fetchall()
-            
-            # Check if any recent Discord session matches an agent's channel
-            # Since we can't directly map session → channel, we use a heuristic:
-            # If there's a recent Discord session with activity, check if the
-            # session title or ID pattern matches known agent names
-            for r in recent_discord_sessions:
-                session_title = (r["title"] or "").lower()
-                for agent_name, channel_id in agent_discord_channels.items():
-                    if agent_name not in discord_session_active:
-                        if agent_name in session_title or channel_id in str(r["id"] or ""):
-                            discord_session_active[agent_name] = True
-            
-            # Also check: any Discord session with recent messages (within 5 min)
-            # This catches direct agent interactions even without title matching
-            if recent_discord_sessions:
-                # If there are recent Discord sessions, mark agents whose channels
-                # are in the active session list as potentially active
-                for r in recent_discord_sessions:
-                    # Check messages in this session for recent activity
-                    scur.execute("""
-                        SELECT COUNT(*) as msg_count, MAX(timestamp) as last_msg
-                        FROM messages
-                        WHERE session_id = ?
-                          AND timestamp > ?
-                        LIMIT 1
-                    """, (r["id"], five_min_ago))
-                    msg_row = scur.fetchone()
-                    if msg_row and msg_row["msg_count"] > 0:
-                        # This session has recent messages — try to match to agent
-                        session_title = (r["title"] or "").lower()
-                        for agent_name, channel_id in agent_discord_channels.items():
-                            if agent_name not in discord_session_active:
-                                if agent_name in session_title:
-                                    discord_session_active[agent_name] = True
-            
-            sconn.close()
-        except Exception:
-            pass  # state.db may not be accessible
-
-        # Check kanban for running tasks + task titles per agent
-        kanban_running = {}
-        kanban_task_titles = {}
-        try:
-            kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-            kconn.execute("PRAGMA query_only=1")
-            kconn.row_factory = sqlite3.Row
-            kcur = kconn.cursor()
-            # Running counts
-            kcur.execute("""
-                SELECT assignee, COUNT(*) as running_count
-                FROM tasks
-                WHERE status = 'running' AND assignee IS NOT NULL
-                GROUP BY assignee
-            """)
-            for r in kcur.fetchall():
-                kanban_running[r["assignee"]] = r["running_count"]
-            # Running task titles (most recent per assignee)
-            kcur.execute("""
-                SELECT assignee, title, created_at
-                FROM tasks
-                WHERE status = 'running' AND assignee IS NOT NULL
-                ORDER BY created_at DESC
-            """)
-            for r in kcur.fetchall():
-                if r["assignee"] not in kanban_task_titles:
-                    kanban_task_titles[r["assignee"]] = r["title"]
-            # Recently completed task titles (most recent per assignee, within 2 hours)
-            # These take lower priority than running tasks but higher than old logs
-            kcur.execute("""
-                SELECT assignee, title, completed_at
-                FROM tasks
-                WHERE status = 'done' AND assignee IS NOT NULL
-                  AND completed_at IS NOT NULL
-                ORDER BY completed_at DESC
-            """)
-            for r in kcur.fetchall():
-                if r["assignee"] in kanban_task_titles:
-                    continue  # already have a running task for this agent
-                try:
-                    completed_ts = r["completed_at"]
-                    if isinstance(completed_ts, (int, float)):
-                        completed_dt = datetime.fromtimestamp(completed_ts, tz=timezone.utc)
-                    else:
-                        completed_dt = datetime.fromisoformat(str(completed_ts).replace("Z", "+00:00"))
-                    age = datetime.now(timezone.utc) - completed_dt
-                    if age > timedelta(hours=2):
-                        continue
-                except Exception:
-                    continue
-                if r["assignee"] not in kanban_task_titles:
-                    kanban_task_titles[r["assignee"]] = r["title"]
-            kconn.close()
-        except Exception:
-            pass  # kanban DB may not exist yet
-
         # Build agent list
         agents = []
         for name, meta in AGENT_REGISTRY.items():
@@ -812,132 +579,21 @@ def agents_data():
             last_seen = stats.get("last_seen", "")
 
             # Determine status
-            # Determine status
-            # Orchestrator: special logic — tracks its own tasks AND infra's tasks
-            # - active if: any non-done orch tasks, OR any non-done infra tasks, OR last_seen < 2min
-            # - waiting if: all orch+infra tasks done but last completed < 10min ago, OR last_seen 2-10min
-            # - idle if: no relevant tasks and last_seen > 10min
-            if name == "orchestrator":
-                orch_active = False
-                orch_waiting = False
-
-                try:
-                    kconn2 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-                    kconn2.execute("PRAGMA query_only=1")
-                    kconn2.row_factory = sqlite3.Row
-                    kcur2 = kconn2.cursor()
-
-                    # Check: any non-done tasks for orchestrator OR infra?
-                    kcur2.execute("""
-                        SELECT COUNT(*) as cnt
-                        FROM tasks
-                        WHERE status NOT IN ('done', 'archived')
-                          AND assignee IN ('orchestrator', 'infra')
-                    """)
-                    row = kcur2.fetchone()
-                    if row and row["cnt"] > 0:
-                        orch_active = True
-                    else:
-                        # All done — check most recent completion across both
-                        kcur2.execute("""
-                            SELECT MAX(completed_at) as max_completed
-                            FROM tasks
-                            WHERE status = 'done'
-                              AND assignee IN ('orchestrator', 'infra')
-                              AND completed_at IS NOT NULL
-                        """)
-                        row2 = kcur2.fetchone()
-                        if row2 and row2["max_completed"]:
-                            ct = row2["max_completed"]
-                            if isinstance(ct, (int, float)):
-                                completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
-                            else:
-                                completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
-                            age = datetime.now(timezone.utc) - completed_dt
-                            if age < timedelta(minutes=10):
-                                orch_waiting = True
-
-                    kconn2.close()
-                except Exception:
-                    pass
-
-                # Also factor in last_seen from agent logs (any platform interaction)
-                if last_seen and not orch_active:
-                    try:
-                        last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-                        age = datetime.now(timezone.utc) - last_dt
-                        if age < timedelta(minutes=2):
-                            orch_active = True
-                        elif age < timedelta(minutes=10) and not orch_waiting:
-                            orch_waiting = True
-                    except Exception:
-                        pass
-
-                # Also check Discord session activity
-                if not orch_active and discord_session_active.get(name, False):
-                    orch_active = True
-
-                if orch_active:
-                    status = "active"
-                elif orch_waiting:
-                    status = "waiting"
-                else:
-                    status = "idle"
-
-            elif kanban_running.get(name, 0) > 0:
-                status = "active"
-            elif discord_session_active.get(name, False):
-                status = "active"
-            elif total == 0:
+            if total == 0:
                 status = "dormant"
             elif last_seen:
-                # Check if last activity is within 5 minutes
+                # Check if last activity is within 1 hour
                 try:
+                    from datetime import datetime, timezone, timedelta
                     last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-                    if datetime.now(timezone.utc) - last_dt < timedelta(minutes=5):
+                    if datetime.now(timezone.utc) - last_dt < timedelta(hours=1):
                         status = "active"
                     else:
-                        # Also check: recently completed kanban task (within 5 min)?
-                        # This catches agents that did work via delegate_task
-                        try:
-                            kconn3 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-                            kconn3.execute("PRAGMA query_only=1")
-                            kconn3.row_factory = sqlite3.Row
-                            kcur3 = kconn3.cursor()
-                            kcur3.execute("""
-                                SELECT MAX(completed_at) as max_completed
-                                FROM tasks
-                                WHERE status = 'done'
-                                  AND assignee = ?
-                                  AND completed_at IS NOT NULL
-                            """, (name,))
-                            row3 = kcur3.fetchone()
-                            if row3 and row3["max_completed"]:
-                                ct = row3["max_completed"]
-                                if isinstance(ct, (int, float)):
-                                    completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
-                                else:
-                                    completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
-                                age = datetime.now(timezone.utc) - completed_dt
-                                if age < timedelta(minutes=5):
-                                    status = "active"
-                                else:
-                                    status = "idle"
-                            else:
-                                status = "idle"
-                            kconn3.close()
-                        except Exception:
-                            status = "idle"
+                        status = "idle"
                 except Exception:
                     status = "idle"
             else:
                 status = "dormant"
-                status = "dormant"
-
-            # Task display: prefer kanban running task title, fall back to last log entry
-            last_task = li.get("task", "")
-            if kanban_task_titles.get(name):
-                last_task = kanban_task_titles[name]
 
             agents.append({
                 "name": name,
@@ -951,7 +607,7 @@ def agents_data():
                 "total_logs": total,
                 "completed": stats.get("completed", 0),
                 "failed": stats.get("failed", 0),
-                "last_task": last_task,
+                "last_task": li.get("task", ""),
                 "model": li.get("model", ""),
                 "last_seen": last_seen,
             })
@@ -960,7 +616,6 @@ def agents_data():
             "agents": agents,
             "total": len(agents),
             "active": sum(1 for a in agents if a["status"] == "active"),
-            "waiting": sum(1 for a in agents if a["status"] == "waiting"),
             "idle": sum(1 for a in agents if a["status"] == "idle"),
             "dormant": sum(1 for a in agents if a["status"] == "dormant"),
         }
@@ -1169,54 +824,6 @@ def sse_pusher():
 
 
 # ---------------------------------------------------------------------------
-# Terminal execution
-# ---------------------------------------------------------------------------
-TERMINAL_TIMEOUT = 30
-TERMINAL_MAX_OUTPUT = 50000  # 50KB cap
-
-# Commands that are never allowed
-TERMINAL_BLOCKLIST = [
-    "rm -rf /", "rm -rf /*", "mkfs", "dd if=/dev/zero",
-    ":(){:|:&};:", "chmod -R 777 /", "chown -R",
-]
-
-def terminal_exec(command, cwd="/home/jayant"):
-    """Execute a shell command safely and return stdout, stderr, exit_code."""
-    if not command or not command.strip():
-        return "", "empty command", 1
-
-    # Blocklist check
-    cmd_lower = command.strip().lower()
-    for blocked in TERMINAL_BLOCKLIST:
-        if blocked.lower() in cmd_lower:
-            return "", f"blocked: {blocked}", 1
-
-    # Resolve cwd
-    if not cwd:
-        cwd = "/home/jayant"
-    cwd = os.path.expanduser(cwd)
-    if not os.path.isdir(cwd):
-        cwd = "/home/jayant"
-
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=TERMINAL_TIMEOUT,
-        )
-        stdout = result.stdout[:TERMINAL_MAX_OUTPUT]
-        stderr = result.stderr[:TERMINAL_MAX_OUTPUT]
-        return stdout, stderr, result.returncode
-    except subprocess.TimeoutExpired:
-        return "", f"timeout after {TERMINAL_TIMEOUT}s", 124
-    except Exception as e:
-        return "", str(e), 1
-
-
-# ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
@@ -1330,22 +937,6 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
-        # Terminal exec
-        if path == "/api/terminal/exec":
-            try:
-                body = self._read_body()
-                cmd = body.get("command", "")
-                cwd = body.get("cwd", "/home/jayant")
-                stdout, stderr, exit_code = terminal_exec(cmd, cwd)
-                self._send_json(200, {
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "exit_code": exit_code,
-                })
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
-            return
-
         # Create task
         if path == "/api/board":
             try:
@@ -1444,7 +1035,6 @@ def main():
     pusher.start()
 
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
-    server.allow_reuse_address = True
     print(f"Mission Control Dashboard running on http://{LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  GET  /           → index.html")
     print(f"  GET  /api/snapshot → full JSON snapshot")
@@ -1453,7 +1043,6 @@ def main():
     print(f"  POST /api/board  → create task")
     print(f"  POST /api/board/update?id= → update task")
     print(f"  POST /api/board/delete?id= → delete task")
-    print(f"  POST /api/terminal/exec → execute command")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
