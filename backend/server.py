@@ -1272,6 +1272,17 @@ from content_api import (
     content_save_file,
 )
 
+import sys as _sys
+import importlib.util as _util
+_SIP_CLIENT_PATH = os.path.expanduser("~/.hermes/agents/_shared/sip-client.py")
+_spec = _util.spec_from_file_location("sip_client", _SIP_CLIENT_PATH)
+_sip_mod = _util.module_from_spec(_spec)
+_spec.loader.exec_module(_sip_mod)
+load_sip_config = _sip_mod.load_sip_config
+save_sip_config = _sip_mod.save_sip_config
+generate_sipjs_app = _sip_mod.generate_sipjs_app
+SIPClient = _sip_mod.SIPClient
+
 # ---------------------------------------------------------------------------
 # Hermes Chat Session (tmux-backed)
 # ---------------------------------------------------------------------------
@@ -1492,6 +1503,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(500, {"error": str(e)})
             return
 
+        # SIP config
+        if path == "/api/sip/config":
+            self._send_json(200, load_sip_config())
+            return
+
+        # SIP web softphone app
+        if path == "/api/sip/webapp":
+            html = generate_sipjs_app()
+            self._send(200, html, "text/html; charset=utf-8")
+            return
+
         # SSE endpoint
         if path == "/events":
             self._handle_sse()
@@ -1540,6 +1562,31 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/terminal/hermes/status":
             alive = hermes_session_status()
             self._send_json(200, {"alive": alive})
+            return
+
+        # SIP config save
+        if path == "/api/sip/config":
+            try:
+                body = self._read_body()
+                save_sip_config(body)
+                self._send_json(200, {"ok": True, "message": "SIP config saved"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
+        # SIP make call
+        if path == "/api/sip/call":
+            try:
+                body = self._read_body()
+                target = body.get("target", "")
+                if not target:
+                    self._send_json(400, {"error": "missing target"})
+                    return
+                client = SIPClient()
+                ok = client.call(target)
+                self._send_json(200, {"ok": ok, "message": f"Calling {target}"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
             return
 
         # Content - save file
@@ -1672,6 +1719,10 @@ def main():
     print(f"  POST /api/board  → create task")
     print(f"  POST /api/board/update?id= → update task")
     print(f"  POST /api/board/delete?id= → delete task")
+    print(f"  GET  /api/sip/config → SIP config")
+    print(f"  POST /api/sip/config → save SIP config")
+    print(f"  GET  /api/sip/webapp → SIP.js softphone")
+    print(f"  POST /api/sip/call → make SIP call")
     print(f"  POST /api/terminal/exec → execute command")
     print(f"  POST /api/terminal/hermes/start → start Hermes chat session")
     print(f"  POST /api/terminal/hermes/send → send to Hermes session")
