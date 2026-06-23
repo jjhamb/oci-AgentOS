@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIP Panel — Hermes AgentOS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(20px);
+        }
+
+        .header h1 {
+            font-size: 1.3em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-dot {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: rgba(51, 65, 85, 0.5);
+            border-radius: 20px;
+            font-size: 0.85em;
+        }
+
+        .status-dot .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .status-dot.registered .dot { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
+        .status-dot.error .dot { background: #ef4444; }
+        .status-dot.loading .dot { background: #fbbf24; animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 24px;
+            padding: 24px 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Phone Card */
+        .phone-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 20px;
+            padding: 28px;
+            backdrop-filter: blur(20px);
+            height: fit-content;
+        }
+
+        .phone-card h2 {
+            font-size: 1em;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 0px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* SIP.js Embedded Phone */
+        .sip-phone-container {
+            width: 100%;
+            height: 600px;
+            max-height: calc(100vh - 180px);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            background: #0f172a;
+            position: relative;
+        }
+
+        .sip-phone-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Config Card */
+        .config-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 20px;
+            padding: 28px;
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            min-height: 600px;
+        }
+
+        .config-card h2 {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-grid .full { grid-column: 1 / -1; }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .field label {
+            font-size: 0.8em;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .field input, .field select {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #e2e8f0;
+            font-size: 0.9em;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .field input:focus, .field select:focus {
+            border-color: #7c3aed;
+        }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+        }
+
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3); }
+
+        .btn-secondary {
+            background: rgba(51, 65, 85, 0.5);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .btn-secondary:hover { background: rgba(71, 85, 105, 0.5); }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            font-weight: 500;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.30s;
+            z-index: 1000;
+        }
+
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.ok { background: rgba(52, 211, 153, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        .toast.err { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* Call Log */
+        .call-log {
+            margin-top: 24px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .call-log h3 {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 12px;
+        }
+
+        .log-list {
+            list-style: none;
+            overflow-y: auto;
+            flex: 1;
+            max-height: 300px;
+        }
+
+        .log-list li {
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            border-radius: 8px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.88em;
+        }
+
+        .log-list li .time { color: #64748b; font-size: 0.85em; }
+        .log-list li .dir { font-weight: 600; margin-right: 8px; }
+        .log-list li .dir.out { color: #60a5fa; }
+        .log-list li .dir.in { color: #34d399; }
+
+        /* No config state */
+        .no-config {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .no-config .icon { font-size: 2.5em; margin-bottom: 12px; }
+        .no-config p { font-size: 0.9em; line-height: 1.6; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; padding: 16px; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📞 SIP Panel</h1>
+    <div class="status-dot" id="regStatus">
+        <div class="dot"></div>
+        <span id="regText">Loading...</span>
+    </div>
+</div>
+
+<div class="layout">
+    <!-- SIP.js Softphone (embedded) -->
+    <div class="phone-card">
+        <h2>☎️ Web Phone</h2>
+        <div class="sip-phone-container" id="phoneContainer">
+            <iframe id="phoneFrame" src="/api/sip/webapp" title="SIP Phone"></iframe>
+        </div>
+        <div style="margin-top: 12px; font-size: 0.78em; color: #64748b; text-align: center;">
+            Status: <span style="color:#94a3b8">●</span> Idle &nbsp;
+            <span style="color:#34d399">●</span> Registered &nbsp;
+            <span style="color:#fb923c">●</span> Calling &nbsp;
+            <span style="color:#60a5fa">●</span> In Call &nbsp;
+            <span style="color:#f87171">⚠</span> Failed
+        </div>
+    </div>
+
+    <!-- Config Panel -->
+    <div class="config-card">
+        <h2>⚙️ SIP Configuration</h2>
+
+        <div id="configForm">
+            <div class="section-title">Server</div>
+            <div class="form-grid">
+                <div class="field full">
+                    <label>SIP Server / Domain</label>
+                    <input type="text" id="sipServer" placeholder="sip.example.com">
+                </div>
+                <div class="field">
+                    <label>Port</label>
+                    <input type="number" id="sipPort" placeholder="5060" value="5060">
+                </div>
+                <div class="field">
+                    <label>Transport</label>
+                    <select id="sipTransport">
+                        <option value="UDP">UDP</option>
+                        <option value="TCP">TCP</option>
+                        <option value="TLS">TLS</option>
+                        <option value="WSS">WSS</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-title">Account</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>Username / Extension</label>
+                    <input type="text" id="sipUsername" placeholder="1001">
+                </div>
+                <div class="field">
+                    <label>Password</label>
+                    <input type="password" id="sipPassword" placeholder="••••••••">
+                </div>
+                <div class="field full">
+                    <label>Display Name</label>
+                    <input type="text" id="sipDisplayName" placeholder="Hermes Agent">
+                </div>
+            </div>
+
+            <div class="section-title">WebRTC (WSS)</div>
+            <div class="form-grid">
+                <div class="field full">
+                    <label>WebSocket URL</label>
+                    <input type="text" id="sipWsUrl" placeholder="wss://sip.example.com:8443/ws">
+                </div>
+                <div class="field">
+                    <label>STUN Server</label>
+                    <input type="text" id="sipStun" placeholder="stun.l.google.com:19302">
+                </div>
+                <div class="field">
+                    <label>TURN Server</label>
+                    <input type="text" id="sipTurn" placeholder=" (optional)">
+                </div>
+            </div>
+
+            <div class="section-title">Quick Call</div>
+            <div class="form-grid">
+                <div class="field full">
+                    <label>Dial (number or SIP URI)</label>
+                    <input type="text" id="quickDial" placeholder="1002 or sip:1002@sip.example.com">
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="saveConfig()">💾 Save Config</button>
+                <button class="btn btn-secondary" id="btnRegister" onclick="registerSIP()">🔗 Register</button>
+                <button class="btn btn-secondary" id="btnCall" onclick="quickCall()" disabled>📞 Call</button>
+                <button class="btn btn-danger" id="btnHangup" onclick="hangup()" disabled>🔴 Hang Up</button>
+                <button class="btn btn-secondary" onclick="loadConfig()">🔄 Reload</button>
+            </div>
+        </div>
+
+        <div class="call-log">
+            <h3>📋 Activity</h3>
+            <ul class="log-list" id="logList">
+                <!-- log entries go here -->
+            </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// State
+let sipConfig = {};
+let registered = false;
+let inCall = false;
+
+// Init
+loadConfig();
+
+// Fetch config from server
+async function loadConfig() {
+    try {
+        const resp = await fetch('/api/sip/config');
+        sipConfig = await resp.json();
+        populateForm(sipConfig);
+        addLog('Config loaded', 'system');
+    } catch (e) {
+        addLog('Failed to load config: ' + e.message, 'error');
+    }
+}
+
+// Fill form with config
+function populateForm(cfg) {
+    const $ = id => document.getElementById(id);
+    $('sipServer').value = cfg.server || '';
+    $('sipPort').value = cfg.port || 5060;
+    $('sipTransport').value = cfg.transport || 'UDP';
+    $('sipUsername').value = cfg.username || '';
+    $('sipPassword').value = cfg.password || '';
+    $('sipDisplayName').value = cfg.display_name || '';
+    const wsServers = (cfg.webrtc && cfg.webrtc.ws_servers) ? cfg.webrtc.ws_servers[0] : '';
+    $('sipWsUrl').value = wsServers;
+    $('sipStun').value = cfg.stun_server || '';
+    $('sipTurn').value = cfg.turn_server || '';
+    updateStatusDot(cfg.enabled ? 'registered' : 'idle');
+}
+
+// Collect config from form
+function collectConfig() {
+    const $ = id => document.getElementById(id);
+    return {
+        server: $('sipServer').value.trim(),
+        port: parseInt($('sipPort').value) || 5060,
+        transport: $('sipTransport').value,
+        username: $('sipUsername').value.trim(),
+        password: $('sipPassword').value,
+        display_name: $('sipDisplayName').value.trim(),
+        stun_server: $('sipStun').value.trim(),
+        turn_server: $('sipTurn').value.trim(),
+        enabled: registered,
+        webrtc: {
+            enabled: true,
+            ws_servers: [$('sipWsUrl').value.trim()]
+        }
+    };
+}
+
+// Save config via API
+async function saveConfig() {
+    const cfg = collectConfig();
+    try {
+        const resp = await fetch('/api/sip/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            sipConfig = cfg;
+            showToast('Config saved', 'ok');
+            addLog('Configuration saved', 'system');
+        } else {
+            showToast('Save failed: ' + (data.error || 'unknown'), 'err');
+        }
+    } catch (e) {
+        showToast('Save error: ' + e.message, 'err');
+    }
+}
+
+// Register — tell the SIP.js iframe to register with current config
+async function registerSIP() {
+    const cfg = collectConfig();
+    if (!cfg.server || !cfg.username) {
+        showToast('Server and username required', 'err');
+        return;
+    }
+    updateStatusDot('loading');
+    addLog(`Registering ${cfg.username}@${cfg.server}...`, 'system');
+    // Save config first
+    try {
+        await fetch('/api/sip/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...cfg, enabled: true })
+        });
+    } catch (e) {
+        updateStatusDot('error');
+        addLog('Config save failed: ' + e.message, 'error');
+        return;
+    }
+    // Reload the iframe so it picks up the new config, then register
+    const frame = document.getElementById('phoneFrame');
+    if (frame) {
+        frame.onload = function() {
+            try {
+                frame.contentWindow.registerSIP();
+                addLog('Registration initiated', 'ok');
+            } catch (e) {
+                addLog('Phone iframe register failed: ' + e.message, 'error');
+                updateStatusDot('error');
+            }
+        };
+        frame.src = '/api/sip/webapp?t=' + Date.now();
+    } else {
+        addLog('Phone iframe not found', 'error');
+        updateStatusDot('error');
+    }
+}
+
+// Quick call
+async function quickCall() {
+    const target = document.getElementById('quickDial').value.trim();
+    if (!target) {
+        showToast('Enter a number or SIP URI', 'err');
+        return;
+    }
+    addLog(`Calling ${target}...`, 'out');
+    try {
+        const resp = await fetch('/api/sip/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            inCall = true;
+            document.getElementById('btnHangup').disabled = false;
+            document.getElementById('btnCall').disabled = true;
+            addLog(`Call connected to ${target}`, 'ok');
+        } else {
+            addLog(`Call failed: ${data.error || 'unknown'}`, 'error');
+        }
+    } catch (e) {
+        addLog(`Call error: ${e.message}`, 'error');
+    }
+}
+
+// Hang up
+function hangup() {
+    inCall = false;
+    document.getElementById('btnHangup').disabled = true;
+    document.getElementById('btnCall').disabled = false;
+    addLog('Call ended', 'system');
+    showToast('Hung up', 'ok');
+}
+
+// Update status dot
+function updateStatusDot(state) {
+    const el = document.getElementById('regStatus');
+    const txt = document.getElementById('regText');
+    el.className = 'status-dot ' + state;
+    if (state === 'registered') txt.textContent = 'Registered';
+    else if (state === 'loading') txt.textContent = 'Registering...';
+    else if (state === 'error') txt.textContent = 'Error';
+    else txt.textContent = 'Idle';
+}
+
+// Add log entry
+function addLog(msg, type) {
+    const list = document.getElementById('logList');
+    const li = document.createElement('li');
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const dirClass = type === 'out' ? 'out' : type === 'in' ? 'in' : '';
+    const dirLabel = type === 'out' ? '↑' : type === 'in' ? '↓' : '•';
+    li.innerHTML = `<span><span class="dir ${dirClass}">${dirLabel}</span> ${msg}</span><span class="time">${time}</span>`;
+    list.insertBefore(li, list.firstChild);
+    // Keep max 50 entries
+    while (list.children.length > 50) list.removeChild(list.lastChild);
+}
+
+// Toast
+function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show ' + type;
+    setTimeout(() => el.className = 'toast', 3000);
+}
+</script>
+</body>
+</html>
