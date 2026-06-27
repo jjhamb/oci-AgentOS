@@ -1051,6 +1051,28 @@
             <span>HERMES DBs</span>
             <span class="gold" id="dbSize">—</span>
           </div>
+          <div class="provider-strip" id="providerStrip" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="pulse-dot" id="providerDot" style="width:7px;height:7px;border-radius:50%;background:var(--brand-mint)"></span>
+              <span style="font-size:10px;color:var(--text-muted)">Model</span>
+              <span style="font-size:11px;font-weight:600;color:var(--text-primary)" id="providerModel">—</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:var(--text-muted)">Key</span>
+              <span style="font-size:11px;font-weight:600;color:var(--brand-cyan)" id="providerKey">—</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:var(--text-muted)">Mode</span>
+              <span style="font-size:10px;font-weight:500;color:var(--brand-amber);background:rgba(251,191,36,0.1);padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px" id="providerMode">—</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:var(--text-muted)">Quota</span>
+              <div style="flex:1;max-width:100px;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+                <div id="quotaBar" style="height:100%;width:0%;background:var(--brand-mint);border-radius:3px;transition:width 0.3s"></div>
+              </div>
+              <span style="font-size:10px;color:var(--text-muted)" id="providerQuota">—</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1081,33 +1103,6 @@
       <div class="stat-card">
         <div class="stat-label">API Cost (24h)</div>
         <div class="stat-value" style="color:var(--brand-mint)" id="statCost">—</div>
-      </div>
-    </div>
-
-    <!-- PROVIDER STATUS -->
-    <div class="provider-strip" id="providerStrip" style="display:flex;gap:12px;align-items:center;padding:8px 16px;margin:0 16px 8px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="pulse-dot" id="providerDot" style="width:8px;height:8px;border-radius:50%;background:var(--brand-mint)"></span>
-        <span style="font-size:11px;color:var(--text-muted)">Model</span>
-        <span style="font-size:12px;font-weight:600;color:var(--text-primary)" id="providerModel">—</span>
-      </div>
-      <div style="width:1px;height:20px;background:rgba(255,255,255,0.08)"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px;color:var(--text-muted)">Key</span>
-        <span style="font-size:12px;font-weight:600;color:var(--brand-cyan)" id="providerKey">—</span>
-      </div>
-      <div style="width:1px;height:20px;background:rgba(255,255,255,0.08)"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px;color:var(--text-muted)">Mode</span>
-        <span style="font-size:11px;font-weight:500;color:var(--brand-amber);background:rgba(251,191,36,0.1);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px" id="providerMode">—</span>
-      </div>
-      <div style="width:1px;height:20px;background:rgba(255,255,255,0.08)"></div>
-      <div style="display:flex;align-items:center;gap:6px;flex:1">
-        <span style="font-size:11px;color:var(--text-muted)">Quota</span>
-        <div style="flex:1;max-width:120px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
-          <div id="quotaBar" style="height:100%;width:0%;background:var(--brand-mint);border-radius:3px;transition:width 0.3s"></div>
-        </div>
-        <span style="font-size:11px;color:var(--text-muted)" id="providerQuota">—</span>
       </div>
     </div>
 
