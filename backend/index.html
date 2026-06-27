@@ -412,6 +412,106 @@
   .col-blocked .kanban-col-count { color: var(--col-blocked); }
   .col-done .kanban-col-count { color: var(--col-done); }
 
+  /* ═══════════════════════════════════════════
+     SCHEDULE TAB
+     ═══════════════════════════════════════════ */
+  .schedule-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+  .schedule-eyebrow {
+    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    color: var(--text-muted); letter-spacing: var(--letter-spacing-wide); text-transform: uppercase;
+  }
+  .schedule-title {
+    font-family: var(--font-display); font-size: var(--font-size-3xl);
+    font-weight: 700; color: var(--text-primary); line-height: 1.1; margin-top: var(--space-1);
+  }
+  .schedule-refresh { display: flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-xs); color: var(--text-muted); }
+  .schedule-refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-mint); animation: kanban-pulse 2s ease-in-out infinite; }
+
+  .schedule-section { margin-bottom: var(--space-5); }
+  .schedule-section:last-child { margin-bottom: 0; }
+
+  .section-eyebrow {
+    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    color: var(--brand-violet-glow); letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase; margin-bottom: var(--space-3);
+    display: flex; align-items: center; gap: var(--space-2);
+  }
+  .section-eyebrow::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, rgba(139,92,246,0.3), transparent);
+  }
+  .section-count {
+    font-size: 10px; color: var(--text-muted);
+    background: rgba(255,255,255,0.06); padding: 1px 6px;
+    border-radius: var(--radius-full); margin-left: auto;
+  }
+
+  .job-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid var(--brand-violet);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-2);
+    transition: all var(--transition-normal);
+  }
+  .job-card:hover {
+    border-color: rgba(255,255,255,0.15);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .job-card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: var(--space-3); margin-bottom: var(--space-2);
+  }
+  .job-owner-badge {
+    font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: var(--radius-sm); flex-shrink: 0;
+  }
+  .job-owner-hermes { background: rgba(139,92,246,0.15); color: var(--brand-violet-glow); border: 1px solid rgba(139,92,246,0.3); }
+  .job-owner-system { background: rgba(138,138,155,0.15); color: var(--text-muted); border: 1px solid rgba(138,138,155,0.3); }
+  .job-owner-error { background: rgba(242,109,109,0.15); color: var(--brand-red); border: 1px solid rgba(242,109,109,0.3); }
+
+  .job-command {
+    font-family: var(--font-mono); font-size: var(--font-size-sm);
+    color: var(--text-primary); line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: default; position: relative;
+  }
+  .job-command:hover { white-space: pre-wrap; word-break: break-all; }
+  .job-card-schedule {
+    display: flex; align-items: center; gap: var(--space-3);
+    margin-bottom: var(--space-2);
+  }
+  .job-schedule-badge {
+    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    color: var(--brand-cyan); background: rgba(125,211,252,0.08);
+    border: 1px solid rgba(125,211,252,0.15);
+    padding: 2px 8px; border-radius: var(--radius-sm);
+  }
+  .job-schedule-english {
+    font-size: var(--font-size-xs); color: var(--text-muted);
+  }
+  .job-source {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); opacity: 0.5;
+    margin-top: var(--space-2); padding-top: var(--space-2);
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .job-error-msg {
+    font-size: var(--font-size-xs); color: var(--brand-red);
+    margin-top: var(--space-1);
+  }
+  .schedule-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 120px; color: var(--text-muted); font-size: var(--font-size-sm);
+    opacity: 0.5; border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: var(--radius-md);
+  }
+
   /* Glass Card */
   .glass-card {
     background: rgba(31,31,43,0.5);
@@ -1398,7 +1498,18 @@
     </div>
   </div>
   <div class="tab-panel" id="panel-schedule">
-    <div class="glass-card"><div class="empty-state"><div class="icon">⏰</div><div>Schedule — cron jobs + timeline</div></div></div>
+    <div class="schedule-header">
+      <div><div class="schedule-eyebrow">Mission Control</div><div class="schedule-title">Schedule</div></div>
+      <div class="schedule-refresh"><div class="schedule-refresh-dot"></div><span id="scheduleStatus">Loading…</span></div>
+    </div>
+    <div class="schedule-section" id="section-hermes">
+      <div class="section-eyebrow">Hermes Jobs<span class="section-count" id="count-hermes">0</span></div>
+      <div id="jobs-hermes"></div>
+    </div>
+    <div class="schedule-section" id="section-system">
+      <div class="section-eyebrow">System Jobs<span class="section-count" id="count-system">0</span></div>
+      <div id="jobs-system"></div>
+    </div>
   </div>
   <div class="tab-panel" id="panel-content">
     <div class="glass-card"><div class="empty-state"><div class="icon">📁</div><div>Content — documents + storage</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 28–29 build this panel</div></div></div>
@@ -2419,6 +2530,109 @@
     };
     fetch('/api/snapshot').then(r => r.json()).then(d => renderAgentsTab(d)).catch(() => {});
   }
+
+  // ── Schedule Tab ──
+  function renderSchedule(jobs) {
+    const hermesEl = document.getElementById('jobs-hermes');
+    const systemEl = document.getElementById('jobs-system');
+    const hermesCount = document.getElementById('count-hermes');
+    const systemCount = document.getElementById('count-system');
+
+    const hermesJobs = [];
+    const systemJobs = [];
+
+    jobs.forEach(job => {
+      if (job.error) {
+        // Error jobs go to their source bucket
+        if (job.source && job.source.includes('hermes')) {
+          hermesJobs.push(job);
+        } else {
+          systemJobs.push(job);
+        }
+      } else if (job.source && (job.source.includes('hermes') || job.label === 'hermes')) {
+        hermesJobs.push(job);
+      } else {
+        systemJobs.push(job);
+      }
+    });
+
+    if (hermesCount) hermesCount.textContent = hermesJobs.length;
+    if (systemCount) systemCount.textContent = systemJobs.length;
+    if (document.getElementById('scheduleStatus')) {
+      document.getElementById('scheduleStatus').textContent = 'Live · ' + jobs.length + ' jobs';
+    }
+
+    if (hermesJobs.length === 0) {
+      hermesEl.innerHTML = '<div class="schedule-empty">No Hermes cron jobs found.</div>';
+    } else {
+      hermesEl.innerHTML = hermesJobs.map(job => buildJobCard(job, 'hermes')).join('');
+    }
+
+    if (systemJobs.length === 0) {
+      systemEl.innerHTML = '<div class="schedule-empty">No system cron jobs found.</div>';
+    } else {
+      systemEl.innerHTML = systemJobs.map(job => buildJobCard(job, 'system')).join('');
+    }
+  }
+
+  function buildJobCard(job, type) {
+    if (job.error) {
+      return '<div class="job-card" style="border-left-color:var(--brand-red)">' +
+        '<div class="job-card-header"><span class="job-owner-badge job-owner-error">⚠ Error</span></div>' +
+        '<div class="job-command">' + escapeHtml(job.source) + '</div>' +
+        '<div class="job-error-msg">' + escapeHtml(job.error) + '</div>' +
+      '</div>';
+    }
+
+    const ownerClass = type === 'hermes' ? 'job-owner-hermes' : 'job-owner-system';
+    const ownerLabel = type === 'hermes' ? 'HERMES' : 'SYSTEM';
+    const commandDisplay = job.command || '';
+    const enabledBadge = job.enabled === false
+      ? '<span class="job-schedule-badge" style="margin-left:4px;color:var(--brand-red)">DISABLED</span>'
+      : '';
+
+    return '<div class="job-card">' +
+      '<div class="job-card-header">' +
+        '<div class="job-command" title="' + escapeHtml(commandDisplay) + '">' + escapeHtml(commandDisplay) + '</div>' +
+        '<span class="job-owner-badge ' + ownerClass + '">' + ownerLabel + '</span>' +
+      '</div>' +
+      '<div class="job-card-schedule">' +
+        '<span class="job-schedule-badge">' + escapeHtml(job.schedule_raw || '—') + '</span>' +
+        '<span class="job-schedule-english">' + escapeHtml(job.schedule_english || '') + '</span>' +
+        enabledBadge +
+      '</div>' +
+      '<div class="job-source">' + escapeHtml(job.source) + '</div>' +
+    '</div>';
+  }
+
+  function fetchCron() {
+    if (isStandalone) return;
+    fetch('/api/cron')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => { renderSchedule(data); })
+      .catch(() => {/* silent */});
+  }
+
+  // Start schedule tab when visible
+  const scheduleObserver = new MutationObserver(() => {
+    const panel = document.getElementById('panel-schedule');
+    if (panel && panel.classList.contains('active') && !window._scheduleStarted) {
+      window._scheduleStarted = true;
+      fetchCron();
+    }
+  });
+  scheduleObserver.observe(document.getElementById('panel-schedule'), { attributes: true, attributeFilter: ['class'] });
+  if (document.getElementById('panel-schedule').classList.contains('active')) {
+    window._scheduleStarted = true;
+    fetchCron();
+  }
+
+  // Periodic refresh for schedule tab
+  setInterval(() => {
+    if (document.getElementById('panel-schedule')?.classList.contains('active')) {
+      fetchCron();
+    }
+  }, 30000);
 
   // ── Tasks Tab ──
   const STATUS_COLUMNS = ['triage', 'todo', 'ready', 'running', 'blocked', 'done'];
