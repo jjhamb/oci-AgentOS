@@ -350,6 +350,139 @@
   }
   .save-status { font-size: var(--font-size-xs); color: var(--text-muted); flex: 1; }
 
+  /* ── Code Preview (code-server/zed style) ── */
+  .code-preview-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0d1117;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .code-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 6px 16px;
+    background: #161b22;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .code-lang-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--brand-mint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .code-lines-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .code-copy-btn {
+    color: var(--text-muted) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    background: rgba(255,255,255,0.04) !important;
+  }
+  .code-copy-btn:hover { color: var(--text-primary) !important; border-color: rgba(255,255,255,0.2) !important; }
+
+  .code-preview-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .code-line-numbers {
+    padding: 16px 12px;
+    background: #0d1117;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    user-select: none;
+    text-align: right;
+    min-width: 50px;
+    overflow: hidden;
+  }
+  .code-line-num {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: #484f58;
+    display: block;
+  }
+  .code-content {
+    flex: 1;
+    padding: 16px;
+    margin: 0;
+    overflow: auto;
+    font-family: var(--font-mono) !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    background: #0d1117 !important;
+    color: #c9d1d9 !important;
+  }
+  .code-content code {
+    font-family: var(--font-mono) !important;
+    font-size: 13px !important;
+    background: transparent !important;
+    padding: 0 !important;
+    color: inherit !important;
+  }
+
+  /* ── Document Preview (PDF/DOCX/XLSX) ── */
+  .doc-preview {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0d1117;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .doc-preview-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 8px 16px;
+    background: #161b22;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .doc-icon { font-size: 20px; }
+  .doc-ext {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--brand-cyan);
+    text-transform: uppercase;
+  }
+  .doc-size {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .doc-content {
+    flex: 1;
+    padding: 20px 24px;
+    margin: 0;
+    overflow: auto;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0d1117;
+  }
+
+  /* ── HTML iframe Preview ── */
+  .preview-html-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #fff;
+    border-radius: var(--radius-md);
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .nav { flex-wrap: wrap; gap: var(--space-2); }
@@ -610,31 +743,32 @@
     if (type === 'image') {
       body.innerHTML = `<div class="preview-image"><img src="data:${data.mime};base64,${data.content}" alt="${escapeHtml(currentFile)}"></div>`;
     } else if (type === 'text' && ext === '.md') {
-      // Render markdown
       if (typeof marked !== 'undefined') {
         const html = marked.parse(data.content);
         body.innerHTML = '<div class="preview-md">' + html + '</div>';
-        // Apply syntax highlighting to code blocks
         if (typeof hljs !== 'undefined') {
           body.querySelectorAll('pre code').forEach(block => { hljs.highlightElement(block); });
         }
       } else {
         body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
       }
-    } else if (type === 'text' || type === 'pdf' || type === 'docx' || type === 'xlsx') {
-      // Text/code preview with optional syntax highlighting
-      if (typeof hljs !== 'undefined' && ext && ext !== '.txt' && ext !== '.log') {
-        const lang = ext.replace('.', '');
-        let highlighted;
-        try {
-          highlighted = hljs.highlight(data.content, { language: lang, ignoreIllegals: true }).value;
-        } catch(e) {
-          highlighted = escapeHtml(data.content);
-        }
-        body.innerHTML = '<div class="preview-code">' + highlighted + '</div>';
-      } else {
-        body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
-      }
+    } else if (type === 'document') {
+      const fileIcon = { '.pdf': '�', '.docx': '�', '.xlsx': '�' }[ext] || '📄';
+      body.innerHTML =
+        '<div class="doc-preview">' +
+          '<div class="doc-preview-header">' +
+            '<span class="doc-icon">' + fileIcon + '</span>' +
+            '<span class="doc-ext">' + (ext || '').toUpperCase() + '</span>' +
+            '<span class="doc-size">' + (data.size ? formatSize(data.size) : '') + '</span>' +
+          '</div>' +
+          '<pre class="doc-content">' + escapeHtml(data.content) + '</pre>' +
+        '</div>';
+    } else if (type === 'html') {
+      body.innerHTML = '<iframe class="preview-html-frame" src="data:text/html;charset=utf-8,' + encodeURIComponent(data.content) + '"></iframe>';
+    } else if (type === 'text' && isCodeExt(ext)) {
+      body.innerHTML = buildCodePreview(data.content, ext);
+    } else if (type === 'text') {
+      body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
     } else if (type === 'binary') {
       body.innerHTML = `<div class="preview-empty">
         <div class="preview-empty-icon">📦</div>
@@ -645,6 +779,58 @@
       body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
     }
   }
+
+  function isCodeExt(ext) {
+    return ['.py','.js','.ts','.jsx','.tsx','.sh','.bash','.css','.html','.xml','.json',
+            '.yaml','.yml','.sql','.env','.conf','.cfg','.ini','.toml','.rs','.go',
+            '.rb','.php','.java','.c','.cpp','.cs','.swift','.kt','.lua','.pl','.ex'].includes(ext);
+  }
+
+  function buildCodePreview(content, ext) {
+    const lang = ext.replace('.', '');
+    let detectedLang = lang;
+    if (!lang || lang === 'txt' || lang === 'log') detectedLang = detectLanguage(content);
+    const lines = content.split('\n');
+    const lineNumHtml = lines.map((_, i) => '<span class="code-line-num">' + (i + 1) + '</span>').join('');
+    const codeHighlighted = (typeof hljs !== 'undefined' && detectedLang && detectedLang !== 'text')
+      ? hljs.highlight(content, { language: detectedLang, ignoreIllegals: true }).value
+      : escapeHtml(content);
+    return '<div class="code-preview-wrapper">' +
+      '<div class="code-preview-bar">' +
+        '<span class="code-lang-badge">' + detectedLang + '</span>' +
+        '<span class="code-lines-count">' + lines.length + ' lines</span>' +
+        '<button class="preview-btn code-copy-btn" style="margin-left:auto;padding:2px 8px;font-size:10px">Copy</button>' +
+      '</div>' +
+      '<div class="code-preview-container">' +
+        '<div class="code-line-numbers">' + lineNumHtml + '</div>' +
+        '<pre class="code-content"><code>' + codeHighlighted + '</code></pre>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function detectLanguage(content) {
+    const t = content.trimStart();
+    if (t.startsWith('#!/usr/bin/env python') || t.startsWith('#!/usr/bin/python')) return 'python';
+    if (t.startsWith('<!DOCTYPE html') || t.startsWith('<html')) return 'xml';
+    if (t.startsWith('import ') && content.includes('def ')) return 'python';
+    if (t.startsWith('const ') || t.startsWith('let ') || (content.includes('function ') && t.startsWith('{'))) return 'javascript';
+    if (t.startsWith('{') && content.includes('"')) return 'json';
+    if (t.startsWith('<')) return 'xml';
+    return 'text';
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('code-copy-btn')) {
+      const codeEl = e.target.closest('.code-preview-wrapper')?.querySelector('code');
+      if (codeEl && navigator.clipboard) {
+        navigator.clipboard.writeText(codeEl.textContent).then(() => {
+          const orig = e.target.textContent;
+          e.target.textContent = 'Copied!';
+          setTimeout(() => { e.target.textContent = orig; }, 1500);
+        });
+      }
+    }
+  });
 
   // Edit mode
   document.getElementById('btnEdit').addEventListener('click', () => {
