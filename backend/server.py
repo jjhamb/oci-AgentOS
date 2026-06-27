@@ -171,21 +171,25 @@ def activity_data():
 
             # Running tasks → in_progress entries
             kcur.execute("""
-                SELECT assignee, title, started_at
+                SELECT assignee, title, body, started_at
                 FROM tasks
                 WHERE status = 'running' AND assignee IS NOT NULL
                 ORDER BY started_at DESC
             """)
             for r in kcur.fetchall():
+                # Map default-profile tasks to specialist agent for display
+                agent_name = r["assignee"]
+                if agent_name == "default":
+                    agent_name = _map_default_task_to_specialist(r["title"], r.get("body", ""))
                 synth_desc = f"running: {r['title']}"
                 already = any(
-                    e["agent_name"] == r["assignee"] and e["task_description"] == synth_desc
+                    e["agent_name"] == agent_name and e["task_description"] == synth_desc
                     for e in recent
                 )
                 if not already:
                     synth_entry = {
-                        "id": f"kanban-{r['assignee']}-running",
-                        "agent_name": r["assignee"],
+                        "id": f"kanban-{agent_name}-running",
+                        "agent_name": agent_name,
                         "task_description": synth_desc,
                         "model_used": "",
                         "status": "in_progress",
@@ -199,7 +203,7 @@ def activity_data():
             # Recently completed tasks (last 2 hours) → completed entries
             # These persist so the activity log shows the full lifecycle
             kcur.execute("""
-                SELECT assignee, title, completed_at, started_at
+                SELECT assignee, title, body, completed_at, started_at
                 FROM tasks
                 WHERE status = 'done' AND assignee IS NOT NULL
                   AND completed_at IS NOT NULL
@@ -207,6 +211,11 @@ def activity_data():
                 LIMIT 20
             """)
             for r in kcur.fetchall():
+                # Map default-profile tasks to specialist agent for display
+                agent_name = r["assignee"]
+                if agent_name == "default":
+                    agent_name = _map_default_task_to_specialist(r["title"], r.get("body", ""))
+
                 # Only include tasks completed in the last 2 hours
                 try:
                     completed_ts = r["completed_at"]
@@ -214,6 +223,8 @@ def activity_data():
                         completed_dt = datetime.fromtimestamp(completed_ts, tz=timezone.utc)
                     else:
                         completed_dt = datetime.fromisoformat(str(completed_ts).replace("Z", "+00:00"))
+                        if completed_dt.tzinfo is None:
+                            completed_dt = completed_dt.replace(tzinfo=timezone.utc)
                     age = datetime.now(timezone.utc) - completed_dt
                     if age > timedelta(hours=2):
                         continue
@@ -222,13 +233,13 @@ def activity_data():
 
                 synth_desc = f"completed: {r['title']}"
                 already = any(
-                    e["agent_name"] == r["assignee"] and e["task_description"] == synth_desc
+                    e["agent_name"] == agent_name and e["task_description"] == synth_desc
                     for e in recent
                 )
                 if not already:
                     synth_entry = {
-                        "id": f"kanban-{r['assignee']}-done-{r['completed_at']}",
-                        "agent_name": r["assignee"],
+                        "id": f"kanban-{agent_name}-done-{r['completed_at']}",
+                        "agent_name": agent_name,
                         "task_description": synth_desc,
                         "model_used": "",
                         "status": "completed",
@@ -251,7 +262,10 @@ def activity_data():
                 return datetime.min.replace(tzinfo=timezone.utc)
             if isinstance(ts, str):
                 try:
-                    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt
                 except Exception:
                     return datetime.min.replace(tzinfo=timezone.utc)
             if isinstance(ts, (int, float)):
@@ -691,6 +705,35 @@ AGENT_REGISTRY = {
 }
 
 
+def _map_default_task_to_specialist(title, body):
+    """Map a kanban task with assignee='default' to a specialist agent.
+    
+    When orchestrator creates tasks in single-profile mode, all tasks use
+    assignee='default'. The specialist role is determined by keywords in
+    the task title/body.
+    
+    Returns the specialist agent name (e.g., 'analyst') or 'orchestrator'
+    if no specialist keyword matches.
+    """
+    text = f"{title} {body}".lower()
+    
+    # Specialist role keywords (order matters — first match wins)
+    specialist_keywords = [
+        ("analyst", ["analyst", "research", "analysis", "market intel", "brief"]),
+        ("writer", ["writer", "blog", "content", "copy", "script", "article", "write"]),
+        ("coder", ["coder", "code", "build", "debug", "deploy", "fix", "implement", "ec2", "apache", "ses"]),
+        ("marketer", ["marketer", "campaign", "promotion", "social media", "strategy", "brand"]),
+    ]
+    
+    for agent_name, keywords in specialist_keywords:
+        for kw in keywords:
+            if kw in text:
+                return agent_name
+    
+    # Default: orchestrator handles it directly
+    return "orchestrator"
+
+
 def agents_data():
     """Return status for all 11 agents based on agent-logs.db activity + kanban."""
     try:
@@ -796,56 +839,76 @@ def agents_data():
         # Check kanban for running tasks + task titles per agent
         kanban_running = {}
         kanban_task_titles = {}
+        # Track synthetic activity entries generated for default-profile tasks
+        # so the orchestrator's kanban delegation logic can attribute work to specialists
+        kanban_specialist_active = set()  # specialist agents with default-profile tasks
         try:
             kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
             kconn.execute("PRAGMA query_only=1")
             kconn.row_factory = sqlite3.Row
             kcur = kconn.cursor()
-            # Running counts
+            # Get ALL running tasks (need body for default→specialist mapping)
             kcur.execute("""
-                SELECT assignee, COUNT(*) as running_count
+                SELECT assignee, title, body, created_at, started_at, completed_at
                 FROM tasks
-                WHERE status = 'running' AND assignee IS NOT NULL
-                GROUP BY assignee
-            """)
-            for r in kcur.fetchall():
-                kanban_running[r["assignee"]] = r["running_count"]
-            # Running task titles (most recent per assignee)
-            kcur.execute("""
-                SELECT assignee, title, created_at
-                FROM tasks
-                WHERE status = 'running' AND assignee IS NOT NULL
+                WHERE status IN ('running', 'done')
+                  AND assignee IS NOT NULL
                 ORDER BY created_at DESC
             """)
-            for r in kcur.fetchall():
-                if r["assignee"] not in kanban_task_titles:
-                    kanban_task_titles[r["assignee"]] = r["title"]
-            # Recently completed task titles (most recent per assignee, within 2 hours)
-            # These take lower priority than running tasks but higher than old logs
-            kcur.execute("""
-                SELECT assignee, title, completed_at
-                FROM tasks
-                WHERE status = 'done' AND assignee IS NOT NULL
-                  AND completed_at IS NOT NULL
-                ORDER BY completed_at DESC
-            """)
-            for r in kcur.fetchall():
-                if r["assignee"] in kanban_task_titles:
-                    continue  # already have a running task for this agent
+            all_tasks = [dict(r) for r in kcur.fetchall()]
+            kconn.close()
+
+            # Remap 'default' assignee to specialist agent based on task title/body
+            for t in all_tasks:
+                assignee = t["assignee"]
+                if assignee == "default":
+                    specialist = _map_default_task_to_specialist(t["title"], t.get("body", ""))
+                    assignee = specialist
+                    # Only track active (running) tasks for orchestrator glow
+                    has_started = t.get("started_at") is not None
+                    has_completed = t.get("completed_at") is not None
+                    is_running = has_started and not has_completed
+                    if is_running:
+                        kanban_specialist_active.add(specialist)
+
+                # A task is "running" if it has started_at but no completed_at
+                # A task is "done" if it has completed_at
+                has_started = t.get("started_at") is not None
+                has_completed = t.get("completed_at") is not None
+                is_running = has_started and not has_completed
+
+                # For running tasks: count and title
+                if is_running:
+                    kanban_running[assignee] = kanban_running.get(assignee, 0) + 1
+                    if assignee not in kanban_task_titles:
+                        kanban_task_titles[assignee] = t["title"]
+
+            # For recently completed tasks: add titles (within 2 hours)
+            for t in all_tasks:
+                assignee = t["assignee"]
+                if assignee == "default":
+                    specialist = _map_default_task_to_specialist(t["title"], t.get("body", ""))
+                    assignee = specialist
+
+                completed_ts = t.get("completed_at")
+                if not completed_ts:
+                    continue
+                if assignee in kanban_task_titles:
+                    continue  # already have a running task title
                 try:
-                    completed_ts = r["completed_at"]
                     if isinstance(completed_ts, (int, float)):
                         completed_dt = datetime.fromtimestamp(completed_ts, tz=timezone.utc)
                     else:
                         completed_dt = datetime.fromisoformat(str(completed_ts).replace("Z", "+00:00"))
+                        if completed_dt.tzinfo is None:
+                            completed_dt = completed_dt.replace(tzinfo=timezone.utc)
                     age = datetime.now(timezone.utc) - completed_dt
                     if age > timedelta(hours=2):
                         continue
                 except Exception:
                     continue
-                if r["assignee"] not in kanban_task_titles:
-                    kanban_task_titles[r["assignee"]] = r["title"]
-            kconn.close()
+                kanban_task_titles[assignee] = t["title"]
+
         except Exception:
             pass  # kanban DB may not exist yet
 
@@ -866,6 +929,10 @@ def agents_data():
             if name == "orchestrator":
                 orch_active = False
                 orch_waiting = False
+
+                # Check if any specialist has an active default-profile task
+                if kanban_specialist_active:
+                    orch_active = True
 
                 try:
                     kconn2 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
@@ -911,6 +978,8 @@ def agents_data():
                 if last_seen and not orch_active:
                     try:
                         last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                        if last_dt.tzinfo is None:
+                            last_dt = last_dt.replace(tzinfo=timezone.utc)
                         age = datetime.now(timezone.utc) - last_dt
                         if age < timedelta(minutes=2):
                             orch_active = True
@@ -940,6 +1009,8 @@ def agents_data():
                 # Check if last activity is within 5 minutes
                 try:
                     last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                    if last_dt.tzinfo is None:
+                        last_dt = last_dt.replace(tzinfo=timezone.utc)
                     if datetime.now(timezone.utc) - last_dt < timedelta(minutes=5):
                         status = "active"
                     else:
@@ -964,6 +1035,8 @@ def agents_data():
                                     completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
                                 else:
                                     completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
+                                    if completed_dt.tzinfo is None:
+                                        completed_dt = completed_dt.replace(tzinfo=timezone.utc)
                                 age = datetime.now(timezone.utc) - completed_dt
                                 if age < timedelta(minutes=5):
                                     status = "active"
@@ -1353,7 +1426,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     # ---- helpers ----
-    def _send(self, code, body, content_type="application/json"):
+    def _send(self, code, body, content_type="application/json", cache=False):
         payload = body if isinstance(body, bytes) else body.encode()
         self.send_response(code)
         self.send_header("Content-Type", content_type)
@@ -1361,6 +1434,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        if not cache:
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -1509,9 +1585,21 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # SIP web softphone app
-        if path == "/api/sip/webapp":
-            html = generate_sipjs_app()
+        if path in ("/api/sip/webapp", "/api/sip/v2"):
+            html = generate_sipjs_app(config=load_sip_config())
             self._send(200, html, "text/html; charset=utf-8")
+            return
+
+        # Static assets (SIP.js bundle, etc.)
+        if path.startswith("/static/"):
+            static_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", path[len("/static/"):])
+            if not os.path.isfile(static_file):
+                self._send_json(404, {"error": "not found"})
+                return
+            ext = os.path.splitext(static_file)[1]
+            ct = {"js": "application/javascript", "css": "text/css"}.get(ext, "application/octet-stream")
+            with open(static_file, "rb") as f:
+                self._send(200, f.read(), ct)
             return
 
         # SSE endpoint
