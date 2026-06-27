@@ -2953,15 +2953,90 @@
     if (type === 'image') {
       body.innerHTML = '<div class="preview-image"><img src="data:' + (data.mime || 'image/png') + ';base64,' + data.content + '" alt="' + escapeHtml(currentFile) + '"></div>';
     } else if (type === 'text' && ext === '.md') {
-      body.innerHTML = '<div class="preview-md">' + escapeHtml(data.content) + '</div>';
-    } else if (type === 'text' || type === 'pdf' || type === 'docx' || type === 'xlsx') {
-      body.innerHTML = '<div class="preview-code">' + escapeHtml(data.content) + '</div>';
+      if (typeof marked !== 'undefined') {
+        const html = marked.parse(data.content);
+        body.innerHTML = '<div class="preview-md">' + html + '</div>';
+        if (typeof hljs !== 'undefined') {
+          body.querySelectorAll('pre code').forEach(block => { hljs.highlightElement(block); });
+        }
+      } else {
+        body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
+      }
+    } else if (type === 'document') {
+      const fileIcon = { '.pdf': '📕', '.docx': '📘', '.xlsx': '📗' }[ext] || '�';
+      body.innerHTML =
+        '<div class="doc-preview">' +
+          '<div class="doc-preview-header">' +
+            '<span class="doc-icon">' + fileIcon + '</span>' +
+            '<span class="doc-ext">' + (ext || '').toUpperCase() + '</span>' +
+            '<span class="doc-size">' + (data.size ? formatSize(data.size) : '') + '</span>' +
+          '</div>' +
+          '<pre class="doc-content">' + escapeHtml(data.content) + '</pre>' +
+        '</div>';
+    } else if (type === 'html') {
+      body.innerHTML = '<iframe class="preview-html-frame" src="data:text/html;charset=utf-8,' + encodeURIComponent(data.content) + '"></iframe>';
+    } else if (type === 'text' && isCodeExt(ext)) {
+      body.innerHTML = buildCodePreview(data.content, ext);
+    } else if (type === 'text') {
+      body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
     } else if (type === 'binary') {
       body.innerHTML = '<div class="preview-empty"><div class="preview-empty-icon">📦</div><div>Binary file — preview not available</div><div style="font-size:var(--font-size-xs);margin-top:8px">Use Download to open</div></div>';
     } else {
       body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
     }
   }
+
+  function isCodeExt(ext) {
+    return ['.py','.js','.ts','.jsx','.tsx','.sh','.bash','.css','.html','.xml','.json',
+            '.yaml','.yml','.sql','.env','.conf','.cfg','.ini','.toml','.rs','.go',
+            '.rb','.php','.java','.c','.cpp','.cs','.swift','.kt','.lua','.pl','.ex'].includes(ext);
+  }
+
+  function buildCodePreview(content, ext) {
+    const lang = ext.replace('.', '');
+    let detectedLang = lang;
+    if (!lang || lang === 'txt' || lang === 'log') detectedLang = detectLanguage(content);
+    const lines = content.split('\n');
+    const lineNumHtml = lines.map((_, i) => '<span class="code-line-num">' + (i + 1) + '</span>').join('');
+    const codeHighlighted = (typeof hljs !== 'undefined' && detectedLang && detectedLang !== 'text')
+      ? hljs.highlight(content, { language: detectedLang, ignoreIllegals: true }).value
+      : escapeHtml(content);
+    return '<div class="code-preview-wrapper">' +
+      '<div class="code-preview-bar">' +
+        '<span class="code-lang-badge">' + detectedLang + '</span>' +
+        '<span class="code-lines-count">' + lines.length + ' lines</span>' +
+        '<button class="preview-btn code-copy-btn" style="margin-left:auto;padding:2px 8px;font-size:10px">Copy</button>' +
+      '</div>' +
+      '<div class="code-preview-container">' +
+        '<div class="code-line-numbers">' + lineNumHtml + '</div>' +
+        '<pre class="code-content"><code>' + codeHighlighted + '</code></pre>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function detectLanguage(content) {
+    const t = content.trimStart();
+    if (t.startsWith('#!/usr/bin/env python') || t.startsWith('#!/usr/bin/python')) return 'python';
+    if (t.startsWith('<!DOCTYPE html') || t.startsWith('<html')) return 'xml';
+    if (t.startsWith('import ') && content.includes('def ')) return 'python';
+    if (t.startsWith('const ') || t.startsWith('let ') || (content.includes('function ') && t.startsWith('{'))) return 'javascript';
+    if (t.startsWith('{') && content.includes('"')) return 'json';
+    if (t.startsWith('<')) return 'xml';
+    return 'text';
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('code-copy-btn')) {
+      const codeEl = e.target.closest('.code-preview-wrapper')?.querySelector('code');
+      if (codeEl && navigator.clipboard) {
+        navigator.clipboard.writeText(codeEl.textContent).then(() => {
+          const orig = e.target.textContent;
+          e.target.textContent = 'Copied!';
+          setTimeout(() => { e.target.textContent = orig; }, 1500);
+        });
+      }
+    }
+  });
 
   document.getElementById('btnEdit').addEventListener('click', () => {
     if (!currentFile) return;
