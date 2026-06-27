@@ -1079,6 +1079,28 @@
       </div>
     </div>
 
+    <!-- PROVIDER STATUS -->
+    <div class="provider-strip" id="providerStrip" style="display:flex;gap:12px;align-items:center;padding:8px 16px;margin:0 16px 8px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="pulse-dot" id="providerDot" style="width:8px;height:8px;border-radius:50%;background:var(--brand-mint)"></span>
+        <span style="font-size:11px;color:var(--text-muted)">Model</span>
+        <span style="font-size:12px;font-weight:600;color:var(--text-primary)" id="providerModel">—</span>
+      </div>
+      <div style="width:1px;height:20px;background:rgba(255,255,255,0.08)"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--text-muted)">Key</span>
+        <span style="font-size:12px;font-weight:600;color:var(--brand-cyan)" id="providerKey">—</span>
+      </div>
+      <div style="width:1px;height:20px;background:rgba(255,255,255,0.08)"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex:1">
+        <span style="font-size:11px;color:var(--text-muted)">Quota</span>
+        <div style="flex:1;max-width:120px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
+          <div id="quotaBar" style="height:100%;width:0%;background:var(--brand-mint);border-radius:3px;transition:width 0.3s"></div>
+        </div>
+        <span style="font-size:11px;color:var(--text-muted)" id="providerQuota">—</span>
+      </div>
+    </div>
+
     <!-- BOTTOM: Throughput + Activity -->
     <div class="overview-bottom">
       <div class="glass-card">
@@ -1600,7 +1622,36 @@
       .catch(() => {/* silent*/});
   }
 
-  // Multi-series sparkline
+  // Provider status (model, key, quota)
+  function fetchProviderStatus() {
+    if (isStandalone) return;
+    fetch('/api/provider/status')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        const modelEl = document.getElementById('providerModel');
+        const keyEl = document.getElementById('providerKey');
+        const quotaBar = document.getElementById('quotaBar');
+        const quotaText = document.getElementById('providerQuota');
+        const dot = document.getElementById('providerDot');
+
+        if (modelEl) modelEl.textContent = data.model || '—';
+        if (keyEl) keyEl.textContent = data.active_key ? data.active_key.label : '—';
+        if (quotaBar) {
+          const pct = data.quota_pct || 0;
+          quotaBar.style.width = pct + '%';
+          // Color based on usage
+          if (pct > 90) quotaBar.style.background = 'var(--brand-red)';
+          else if (pct > 70) quotaBar.style.background = 'var(--brand-amber)';
+          else quotaBar.style.background = 'var(--brand-mint)';
+        }
+        if (quotaText) quotaText.textContent = `${data.calls_today || 0} / ${data.total_quota || 0}`;
+        if (dot) {
+          const status = data.active_key ? data.active_key.status : 'unknown';
+          dot.style.background = status === 'ok' ? 'var(--brand-mint)' : status === 'rate_limited' ? 'var(--brand-red)' : 'var(--brand-amber)';
+        }
+      })
+      .catch(() => {/* silent*/});
+  }
   const SPARKLINE_SERIES = [
     { key: 'calls',    color: '#7dd3fc', label: 'API calls',   alpha: 0.15 },
     { key: 'messages', color: '#a78bfa', label: 'Messages',    alpha: 0.10 },
@@ -1774,9 +1825,11 @@
     if (typeof EventSource === 'undefined') {
       overviewPollTimer = setInterval(fetchOverview, 8000);
       fetchOverview();
-      // Also poll rate data every 8s
+      // Also poll rate data + provider status every 8s
       ratePollTimer = setInterval(fetchRateData, 8000);
+      providerPollTimer = setInterval(fetchProviderStatus, 30000);
       fetchRateData();
+      fetchProviderStatus();
       return;
     }
     const es = new EventSource('/events');
@@ -1791,10 +1844,12 @@
       // Fallback to polling
       if (!overviewPollTimer) overviewPollTimer = setInterval(fetchOverview, 8000);
       if (!ratePollTimer) ratePollTimer = setInterval(fetchRateData, 8000);
+      if (!providerPollTimer) providerPollTimer = setInterval(fetchProviderStatus, 30000);
     };
     // Initial fetch
     fetchOverview();
     fetchRateData();
+    fetchProviderStatus();
     // Cycle directive every 3s
     setInterval(() => { if (directiveEntries.length) renderDirective(directiveEntries); }, 3000);
   }

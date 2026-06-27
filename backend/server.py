@@ -1807,6 +1807,76 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(500, {"error": str(e)})
             return
 
+        # Provider status (model, key, quota)
+        if path == "/api/provider/status":
+            result = {}
+            try:
+                now = time.time()
+                day_ago = now - 86400
+
+                # Current model from config
+                result['model'] = 'openrouter/owl-alpha'
+                result['provider'] = 'openrouter'
+                result['base_url'] = 'https://openrouter.ai/api/v1'
+
+                # Active key info from auth.json
+                auth_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.hermes', 'auth.json')
+                if not os.path.exists(auth_path):
+                    auth_path = '/home/jayant/.hermes/auth.json'
+                with open(auth_path) as f:
+                    auth = json.load(f)
+
+                pool = auth.get('credential_pool', {}).get('openrouter', [])
+                active = auth.get('active_provider', None)
+
+                # Find the highest-priority key with last_status=ok
+                active_key = None
+                for k in sorted(pool, key=lambda x: x.get('priority', 99)):
+                    if k.get('last_status') == 'ok':
+                        active_key = k
+                        break
+
+                if active_key:
+                    result['active_key'] = {
+                        'label': active_key.get('label', '?'),
+                        'id': active_key.get('id', ''),
+                        'fingerprint': active_key.get('secret_fingerprint', '')[:12],
+                        'status': active_key.get('last_status', 'unknown'),
+                    }
+                else:
+                    result['active_key'] = {'label': 'none', 'status': 'unknown'}
+
+                # Total key count and quota
+                result['total_keys'] = len(pool)
+                result['calls_per_key_per_day'] = 1000
+                result['total_quota'] = len(pool) * 1000
+
+                # Calls today — count sessions started in last 24h
+                conn = sqlite3.connect(STATE_DB)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (day_ago,))
+                result['calls_today'] = cur.fetchone()[0]
+
+                # Per-key usage (from auth.json request_count)
+                key_usage = []
+                for k in sorted(pool, key=lambda x: x.get('priority', 99)):
+                    key_usage.append({
+                        'label': k.get('label', '?'),
+                        'priority': k.get('priority', 99),
+                        'status': k.get('last_status', 'unknown'),
+                        'request_count': k.get('request_count', 0),
+                    })
+                result['keys'] = key_usage
+                conn.close()
+
+                result['quota_remaining'] = result['total_quota'] - result['calls_today']
+                result['quota_pct'] = min(100, round((result['calls_today'] / result['total_quota']) * 100, 1)) if result['total_quota'] > 0 else 0
+
+                self._send_json(200, result)
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
         # SIP config
         if path == "/api/sip/config":
             self._send_json(200, load_sip_config())
