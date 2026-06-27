@@ -236,6 +236,131 @@
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
+  /* ── Tasks Tab — Kanban Board ── */
+  .tasks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+  .tasks-title {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 3vw, 44px);
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .tasks-count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.05);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+  }
+  .kanban-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+  }
+  .kanban-column {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    min-height: 200px;
+  }
+  .kanban-col-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .kanban-col-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .kanban-col-dot.ready { background: var(--brand-cyan); }
+  .kanban-col-dot.running { background: var(--brand-amber); }
+  .kanban-col-dot.blocked { background: var(--brand-red); }
+  .kanban-col-dot.done { background: var(--brand-mint); }
+  .kanban-col-label {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .kanban-col-count {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+  }
+  .kanban-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-2);
+    cursor: default;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .kanban-card:hover {
+    border-color: rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.05);
+  }
+  .kanban-card-title {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .kanban-card-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+  .kanban-card-priority {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .kanban-card-priority.p7 { background: rgba(242,109,109,0.15); color: var(--brand-red); }
+  .kanban-card-priority.p5 { background: rgba(245,181,68,0.15); color: var(--brand-amber); }
+  .kanban-card-priority.p3 { background: rgba(125,211,252,0.15); color: var(--brand-cyan); }
+  .kanban-card-priority.p0 { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+  .kanban-card-assignee {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+  .kanban-card-time {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .kanban-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    padding: var(--space-4) 0;
+    opacity: 0.5;
+  }
+
   /* Glass Card */
   .glass-card {
     background: rgba(31,31,43,0.5);
@@ -1190,7 +1315,28 @@
     </div>
   </div>
   <div class="tab-panel" id="panel-tasks">
-    <div class="glass-card"><div class="empty-state"><div class="icon">✅</div><div>Tasks — live kanban board</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 26 builds this panel</div></div></div>
+    <div class="tasks-header">
+      <div class="tasks-title">Tasks</div>
+      <div class="tasks-count" id="tasksCount">— loading</div>
+    </div>
+    <div class="kanban-board" id="kanbanBoard">
+      <div class="kanban-column" data-status="ready">
+        <div class="kanban-col-header"><span class="kanban-col-dot ready"></span><span class="kanban-col-label">Ready</span><span class="kanban-col-count" id="countReady">0</span></div>
+        <div class="kanban-empty">None</div>
+      </div>
+      <div class="kanban-column" data-status="running">
+        <div class="kanban-col-header"><span class="kanban-col-dot running"></span><span class="kanban-col-label">Running</span><span class="kanban-col-count" id="countRunning">0</span></div>
+        <div class="kanban-empty">None</div>
+      </div>
+      <div class="kanban-column" data-status="blocked">
+        <div class="kanban-col-header"><span class="kanban-col-dot blocked"></span><span class="kanban-col-label">Blocked</span><span class="kanban-col-count" id="countBlocked">0</span></div>
+        <div class="kanban-empty">None</div>
+      </div>
+      <div class="kanban-column" data-status="done">
+        <div class="kanban-col-header"><span class="kanban-col-dot done"></span><span class="kanban-col-label">Done</span><span class="kanban-col-count" id="countDone">0</span></div>
+        <div class="kanban-empty">None</div>
+      </div>
+    </div>
   </div>
   <div class="tab-panel" id="panel-schedule">
     <div class="glass-card"><div class="empty-state"><div class="icon">⏰</div><div>Schedule — cron jobs + timeline</div></div></div>
@@ -2214,6 +2360,111 @@
     };
     fetch('/api/snapshot').then(r => r.json()).then(d => renderAgentsTab(d)).catch(() => {});
   }
+
+  // ── Tasks Tab ──
+  function renderTasksTab() {
+    if (isStandalone) return;
+    fetch('/api/kanban')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        const tasks = data.tasks || [];
+        const statusOrder = ['ready', 'running', 'blocked', 'done'];
+        const total = tasks.length;
+        document.getElementById('tasksCount').textContent = total + ' total';
+
+        // Count per status
+        const counts = {};
+        statusOrder.forEach(s => { counts[s] = 0; });
+        tasks.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
+
+        // Update count badges
+        document.getElementById('countReady').textContent = counts.ready;
+        document.getElementById('countRunning').textContent = counts.running;
+        document.getElementById('countBlocked').textContent = counts.blocked;
+        document.getElementById('countDone').textContent = counts.done;
+
+        // Render columns
+        const columns = document.querySelectorAll('#kanbanBoard .kanban-column');
+        columns.forEach(col => {
+          const status = col.dataset.status;
+          const container = col.querySelector('.kanban-empty');
+          const colTasks = tasks.filter(t => t.status === status);
+
+          if (colTasks.length === 0) {
+            if (!container) {
+              const empty = document.createElement('div');
+              empty.className = 'kanban-empty';
+              empty.textContent = 'None';
+              col.appendChild(empty);
+            }
+          } else {
+            // Remove existing empty-state placeholder
+            if (container) container.remove();
+
+            // Remove existing cards (re-render)
+            col.querySelectorAll('.kanban-card').forEach(c => c.remove());
+
+            // Render cards
+            colTasks.forEach(task => {
+              const card = document.createElement('div');
+              card.className = 'kanban-card';
+              const created = task.created_at ? new Date(task.created_at) : null;
+              const timeAgo = created ? getTimeAgo(created) : '';
+              const assignee = (task.assignee || '—').replace('default', 'All');
+              const body = task.body || '';
+              const isAgent = body.match(/^\[(.+?)\]/);
+              const displayTitle = isAgent ? body : task.title;
+              card.innerHTML =
+                '<div class="kanban-card-title">' + escapeHtml(displayTitle) + '</div>' +
+                '<div class="kanban-card-meta">' +
+                  '<span class="kanban-card-priority p' + (task.priority || 0) + '">P' + (task.priority || 0) + '</span>' +
+                  '<span class="kanban-card-assignee">' + escapeHtml(assignee) + '</span>' +
+                  '<span class="kanban-card-time">' + timeAgo + '</span>' +
+                '</div>';
+              col.appendChild(card);
+            });
+          }
+        });
+      })
+      .catch(() => {/* silent */});
+  }
+
+  function getTimeAgo(date) {
+    const now = new Date();
+    const diffMin = Math.floor((now - date) / 60000);
+    if (diffMin < 1) return 'now';
+    if (diffMin < 60) return diffMin + 'm';
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return diffHr + 'h';
+    return Math.floor(diffHr / 24) + 'd';
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Start tasks tab when visible
+  const tasksObserver = new MutationObserver(() => {
+    const panel = document.getElementById('panel-tasks');
+    if (panel && panel.classList.contains('active') && !window._tasksStarted) {
+      window._tasksStarted = true;
+      renderTasksTab();
+    }
+  });
+  tasksObserver.observe(document.getElementById('panel-tasks'), { attributes: true, attributeFilter: ['class'] });
+  if (document.getElementById('panel-tasks').classList.contains('active')) {
+    window._tasksStarted = true;
+    renderTasksTab();
+  }
+
+  // Periodic refresh for tasks tab
+  setInterval(() => {
+    if (document.getElementById('panel-tasks')?.classList.contains('active')) {
+      renderTasksTab();
+    }
+  }, 15000);
 
   // Start agents tab when visible
   const agentsObserver = new MutationObserver(() => {
