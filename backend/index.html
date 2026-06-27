@@ -42,6 +42,12 @@
     --status-success: var(--brand-mint);
     --status-error: var(--brand-red);
     --status-warning: var(--brand-amber);
+    --col-triage: #8A8A9B;
+    --col-todo: #7DD3FC;
+    --col-ready: #F5B544;
+    --col-running: #5EE2B5;
+    --col-blocked: #F26D6D;
+    --col-done: #6B7280;
     --font-display: 'Inter Tight', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --font-size-xs: 10px;
@@ -237,29 +243,46 @@
   .tab-panel.active { display: block; }
 
   /* ── Tasks Tab — Kanban Board ── */
-  .tasks-header {
+  .kanban-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-4);
   }
-  .tasks-title {
+  .kanban-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+  }
+  .kanban-title {
     font-family: var(--font-display);
-    font-size: clamp(28px, 3vw, 44px);
-    font-weight: 700;
+    font-size: var(--font-size-3xl);
+   700;
     color: var(--text-primary);
   }
-  .tasks-count {
+  .kanban-refresh-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     color: var(--text-muted);
-    background: rgba(255,255,255,0.05);
-    padding: 4px 12px;
-    border-radius: var(--radius-full);
+  }
+  .kanban-refresh-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--brand-mint);
+    animation: kanban-pulse 2s ease-in-out infinite;
+  }
+  @keyframes kanban-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
   }
   .kanban-board {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: var(--space-3);
     align-items: start;
   }
@@ -267,54 +290,63 @@
     background: rgba(255,255,255,0.02);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: var(--radius-md);
-    padding: var(--space-3);
+    padding: var(--space-2);
     min-height: 200px;
   }
   .kanban-col-header {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-3);
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    justify-content: space-between;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-2);
+  }
+  .kanban-col-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
   }
   .kanban-col-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
   }
-  .kanban-col-dot.ready { background: var(--brand-cyan); }
-  .kanban-col-dot.running { background: var(--brand-amber); }
-  .kanban-col-dot.blocked { background: var(--brand-red); }
-  .kanban-col-dot.done { background: var(--brand-mint); }
-  .kanban-col-label {
+  .kanban-col-name {
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
-    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
   .kanban-col-count {
-    margin-left: auto;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
-    color: var(--text-muted);
     background: rgba(255,255,255,0.06);
     padding: 2px 8px;
     border-radius: var(--radius-full);
   }
+  .kanban-col-cards {
+    min-height: 60px;
+  }
+  .kanban-col-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    padding: var(--space-4) 0;
+    opacity: 0.5;
+  }
   .kanban-card {
     background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: var(--radius-sm);
-    padding: var(--space-2) var(--space-3);
+    border-left: 3px solid var(--card-status-color, var(--col-todo));
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
     margin-bottom: var(--space-2);
     cursor: default;
-    transition: border-color 0.15s, background 0.15s;
+    transition: background 0.15s;
   }
   .kanban-card:hover {
-    border-color: rgba(255,255,255,0.18);
     background: rgba(255,255,255,0.05);
   }
+  .kanban-card.running { border-left-color: var(--col-running); }
+  .kanban-card.blocked { border-left-color: var(--col-blocked); }
   .kanban-card-title {
     font-size: var(--font-size-sm);
     color: var(--text-primary);
@@ -353,13 +385,32 @@
     color: var(--text-muted);
     margin-left: auto;
   }
-  .kanban-empty {
-    text-align: center;
-    color: var(--text-muted);
-    font-size: var(--font-size-xs);
-    padding: var(--space-4) 0;
-    opacity: 0.5;
-  }
+
+  /* Column-specific colors */
+  .col-triage .kanban-col-header { background: rgba(138,138,155,0.12); }
+  .col-todo .kanban-col-header { background: rgba(125,211,252,0.12); }
+  .col-ready .kanban-col-header { background: rgba(245,181,68,0.12); }
+  .col-running .kanban-col-header { background: rgba(94,226,181,0.12); }
+  .col-blocked .kanban-col-header { background: rgba(242,109,109,0.12); }
+  .col-done .kanban-col-header { background: rgba(107,114,128,0.12); }
+  .col-triage .kanban-col-dot { background: var(--col-triage); }
+  .col-todo .kanban-col-dot { background: var(--col-todo); }
+  .col-ready .kanban-col-dot { background: var(--col-ready); }
+  .col-running .kanban-col-dot { background: var(--col-running); }
+  .col-blocked .kanban-col-dot { background: var(--col-blocked); }
+  .col-done .kanban-col-dot { background: var(--col-done); }
+  .col-triage .kanban-col-name { color: var(--col-triage); }
+  .col-todo .kanban-col-name { color: var(--col-todo); }
+  .col-ready .kanban-col-name { color: var(--col-ready); }
+  .col-running .kanban-col-name { color: var(--col-running); }
+  .col-blocked .kanban-col-name { color: var(--col-blocked); }
+  .col-done .kanban-col-name { color: var(--col-done); }
+  .col-triage .kanban-col-count { color: var(--col-triage); }
+  .col-todo .kanban-col-count { color: var(--col-todo); }
+  .col-ready .kanban-col-count { color: var(--col-ready); }
+  .col-running .kanban-col-count { color: var(--col-running); }
+  .col-blocked .kanban-col-count { color: var(--col-blocked); }
+  .col-done .kanban-col-count { color: var(--col-done); }
 
   /* Glass Card */
   .glass-card {
@@ -1315,26 +1366,34 @@
     </div>
   </div>
   <div class="tab-panel" id="panel-tasks">
-    <div class="tasks-header">
-      <div class="tasks-title">Tasks</div>
-      <div class="tasks-count" id="tasksCount">— loading</div>
+    <div class="kanban-header">
+      <div><div class="kanban-eyebrow">Mission Control</div><div class="kanban-title">Tasks</div></div>
+      <div class="kanban-refresh-indicator"><div class="kanban-refresh-dot"></div><span>Live · 10s refresh</span></div>
     </div>
     <div class="kanban-board" id="kanbanBoard">
-      <div class="kanban-column" data-status="ready">
-        <div class="kanban-col-header"><span class="kanban-col-dot ready"></span><span class="kanban-col-label">Ready</span><span class="kanban-col-count" id="countReady">0</span></div>
-        <div class="kanban-empty">None</div>
+      <div class="kanban-column col-triage">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Triage</span></div><span class="kanban-col-count" id="col-count-triage">0</span></div>
+        <div class="kanban-col-cards" id="col-triage"><div class="kanban-col-empty">No tasks</div></div>
       </div>
-      <div class="kanban-column" data-status="running">
-        <div class="kanban-col-header"><span class="kanban-col-dot running"></span><span class="kanban-col-label">Running</span><span class="kanban-col-count" id="countRunning">0</span></div>
-        <div class="kanban-empty">None</div>
+      <div class="kanban-column col-todo">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Todo</span></div><span class="kanban-col-count" id="col-count-todo">0</span></div>
+        <div class="kanban-col-cards" id="col-todo"><div class="kanban-col-empty">No tasks</div></div>
       </div>
-      <div class="kanban-column" data-status="blocked">
-        <div class="kanban-col-header"><span class="kanban-col-dot blocked"></span><span class="kanban-col-label">Blocked</span><span class="kanban-col-count" id="countBlocked">0</span></div>
-        <div class="kanban-empty">None</div>
+      <div class="kanban-column col-ready">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Ready</span></div><span class="kanban-col-count" id="col-count-ready">0</span></div>
+        <div class="kanban-col-cards" id="col-ready"><div class="kanban-col-empty">No tasks</div></div>
       </div>
-      <div class="kanban-column" data-status="done">
-        <div class="kanban-col-header"><span class="kanban-col-dot done"></span><span class="kanban-col-label">Done</span><span class="kanban-col-count" id="countDone">0</span></div>
-        <div class="kanban-empty">None</div>
+      <div class="kanban-column col-running">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Running</span></div><span class="kanban-col-count" id="col-count-running">0</span></div>
+        <div class="kanban-col-cards" id="col-running"><div class="kanban-col-empty">No tasks</div></div>
+      </div>
+      <div class="kanban-column col-blocked">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Blocked</span></div><span class="kanban-col-count" id="col-count-blocked">0</span></div>
+        <div class="kanban-col-cards" id="col-blocked"><div class="kanban-col-empty">No tasks</div></div>
+      </div>
+      <div class="kanban-column col-done">
+        <div class="kanban-col-header"><div class="kanban-col-left"><div class="kanban-col-dot"></div><span class="kanban-col-name">Done</span></div><span class="kanban-col-count" id="col-count-done">0</span></div>
+        <div class="kanban-col-cards" id="col-done"><div class="kanban-col-empty">No tasks</div></div>
       </div>
     </div>
   </div>
@@ -2362,67 +2421,54 @@
   }
 
   // ── Tasks Tab ──
+  const STATUS_COLUMNS = ['triage', 'todo', 'ready', 'running', 'blocked', 'done'];
+
+  function buildTaskCard(task) {
+    const created = task.created_at ? new Date(task.created_at) : null;
+    const timeAgo = created ? getTimeAgo(created) : '';
+    const assignee = (task.assignee || '—').replace('default', 'All');
+    const statusClass = task.status === 'running' ? 'running' : task.status === 'blocked' ? 'blocked' : '';
+    return '<div class="kanban-card ' + statusClass + '">' +
+      '<div class="kanban-card-title">' + escapeHtml(task.title) + '</div>' +
+      '<div class="kanban-card-meta">' +
+        '<span class="kanban-card-priority p' + (task.priority || 0) + '">P' + (task.priority || 0) + '</span>' +
+        '<span class="kanban-card-assignee">' + escapeHtml(assignee) + '</span>' +
+        '<span class="kanban-card-time">' + timeAgo + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderTasksTab() {
     if (isStandalone) return;
     fetch('/api/kanban')
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(data => {
         const tasks = data.tasks || [];
-        const statusOrder = ['ready', 'running', 'blocked', 'done'];
-        const total = tasks.length;
-        document.getElementById('tasksCount').textContent = total + ' total';
+        const statusCounts = data.status_counts || {};
 
-        // Count per status
-        const counts = {};
-        statusOrder.forEach(s => { counts[s] = 0; });
-        tasks.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
+        // Update column counts
+        STATUS_COLUMNS.forEach(col => {
+          const countEl = document.getElementById('col-count-' + col);
+          if (countEl) countEl.textContent = statusCounts[col] || 0;
+        });
 
-        // Update count badges
-        document.getElementById('countReady').textContent = counts.ready;
-        document.getElementById('countRunning').textContent = counts.running;
-        document.getElementById('countBlocked').textContent = counts.blocked;
-        document.getElementById('countDone').textContent = counts.done;
+        // Group tasks by status
+        const grouped = {};
+        STATUS_COLUMNS.forEach(col => { grouped[col] = []; });
+        tasks.forEach(task => {
+          const status = task.status || 'triage';
+          if (grouped[status]) grouped[status].push(task);
+        });
 
-        // Render columns
-        const columns = document.querySelectorAll('#kanbanBoard .kanban-column');
-        columns.forEach(col => {
-          const status = col.dataset.status;
-          const container = col.querySelector('.kanban-empty');
-          const colTasks = tasks.filter(t => t.status === status);
-
+        // Render each column
+        STATUS_COLUMNS.forEach(col => {
+          const container = document.getElementById('col-' + col);
+          if (!container) return;
+          const colTasks = grouped[col] || [];
           if (colTasks.length === 0) {
-            if (!container) {
-              const empty = document.createElement('div');
-              empty.className = 'kanban-empty';
-              empty.textContent = 'None';
-              col.appendChild(empty);
-            }
+            container.innerHTML = '<div class="kanban-col-empty">No tasks</div>';
           } else {
-            // Remove existing empty-state placeholder
-            if (container) container.remove();
-
-            // Remove existing cards (re-render)
-            col.querySelectorAll('.kanban-card').forEach(c => c.remove());
-
-            // Render cards
-            colTasks.forEach(task => {
-              const card = document.createElement('div');
-              card.className = 'kanban-card';
-              const created = task.created_at ? new Date(task.created_at) : null;
-              const timeAgo = created ? getTimeAgo(created) : '';
-              const assignee = (task.assignee || '—').replace('default', 'All');
-              const body = task.body || '';
-              const isAgent = body.match(/^\[(.+?)\]/);
-              const displayTitle = isAgent ? body : task.title;
-              card.innerHTML =
-                '<div class="kanban-card-title">' + escapeHtml(displayTitle) + '</div>' +
-                '<div class="kanban-card-meta">' +
-                  '<span class="kanban-card-priority p' + (task.priority || 0) + '">P' + (task.priority || 0) + '</span>' +
-                  '<span class="kanban-card-assignee">' + escapeHtml(assignee) + '</span>' +
-                  '<span class="kanban-card-time">' + timeAgo + '</span>' +
-                '</div>';
-              col.appendChild(card);
-            });
+            container.innerHTML = colTasks.map(t => buildTaskCard(t)).join('');
           }
         });
       })
@@ -2464,7 +2510,7 @@
     if (document.getElementById('panel-tasks')?.classList.contains('active')) {
       renderTasksTab();
     }
-  }, 15000);
+  }, 10000);
 
   // Start agents tab when visible
   const agentsObserver = new MutationObserver(() => {
