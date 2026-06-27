@@ -1754,6 +1754,17 @@ class Handler(BaseHTTPRequestHandler):
                 result['failures_per_min'] = cur.fetchone()[0]
                 conn.close()
 
+                # Completed / failed counts 24h (from agent_logs)
+                conn3 = sqlite3.connect(AGENT_LOGS_DB)
+                cur3 = conn3.cursor()
+                cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE status='completed' AND created_at > datetime('now', '-1 day')")
+                result['completed_24h'] = cur3.fetchone()[0]
+                cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-1 day')")
+                result['failed_24h'] = cur3.fetchone()[0]
+                cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-1 day')")
+                result['messages_24h'] = cur3.fetchone()[0]
+                conn3.close()
+
                 # Token totals 24h
                 cur2.execute("""
                     SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0),
