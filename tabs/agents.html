@@ -37,6 +37,7 @@
     --agent-publisher: var(--brand-violet);
     --agent-reviewer: #6EE7B7;
     --status-active: var(--brand-mint);
+    --status-pulsating: var(--brand-mint);
     --status-idle: var(--brand-amber);
     --status-dormant: var(--text-muted);
     --status-success: var(--brand-mint);
@@ -654,20 +655,24 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   }
 
-  /* Status glow: active = colored pulse, idle = steady dim, dormant = grey flat */
-  .agent-tile.status-active {
+  /* Status glow: pulsating = animated glow, active = solid glow, idle = steady dim, dormant = grey flat */
+  .agent-tile.status-pulsating {
     border-color: var(--tile-accent, rgba(94,226,181,0.5));
     box-shadow: 0 0 12px var(--tile-glow, rgba(94,226,181,0.25)), 0 0 40px var(--tile-glow, rgba(94,226,181,0.1)), inset 0 1px 0 rgba(255,255,255,0.05);
     animation: glow-pulse-active 3s ease-in-out infinite;
   }
   /* Orchestrator gets its own stronger violet glow */
-  .agents-orch-col .agent-tile.status-active {
+  .agents-orch-col .agent-tile.status-pulsating {
     border-color: var(--tile-accent, rgba(167,139,250,0.6));
     animation: glow-pulse-orch 2.5s ease-in-out infinite;
   }
-  @keyframes glow-pulse-orch {
-    0%, 100% { box-shadow: 0 0 12px var(--tile-glow, rgba(167,139,250,0.35)), 0 0 36px var(--tile-glow, rgba(167,139,250,0.12)), inset 0 1px 0 rgba(255,255,255,0.05); }
-    50%      { box-shadow: 0 0 28px var(--tile-glow, rgba(167,139,250,0.6)), 0 0 64px var(--tile-glow, rgba(167,139,250,0.25)), inset 0 1px 0 rgba(255,255,255,0.05); }
+  .agent-tile.status-active {
+    border-color: var(--tile-accent, rgba(94,226,181,0.4));
+    box-shadow: 0 0 8px var(--tile-glow, rgba(94,226,181,0.2)), 0 0 16px var(--tile-glow, rgba(94,226,181,0.08)), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .agents-orch-col .agent-tile.status-active {
+    border-color: var(--tile-accent, rgba(167,139,250,0.5));
+    box-shadow: 0 0 8px var(--tile-glow, rgba(167,139,250,0.25)), 0 0 16px var(--tile-glow, rgba(167,139,250,0.1)), inset 0 1px 0 rgba(255,255,255,0.05);
   }
   .agent-tile.status-idle {
     border-color: rgba(255,255,255,0.12);
@@ -679,6 +684,10 @@
     opacity: 0.6;
   }
 
+  @keyframes glow-pulse-orch {
+    0%, 100% { box-shadow: 0 0 12px var(--tile-glow, rgba(167,139,250,0.35)), 0 0 36px var(--tile-glow, rgba(167,139,250,0.12)), inset 0 1px 0 rgba(255,255,255,0.05); }
+    50%      { box-shadow: 0 0 28px var(--tile-glow, rgba(167,139,250,0.6)), 0 0 64px var(--tile-glow, rgba(167,139,250,0.25)), inset 0 1px 0 rgba(255,255,255,0.05); }
+  }
   @keyframes glow-pulse-active {
     0%, 100% { box-shadow: 0 0 8px var(--tile-glow, rgba(94,226,181,0.3)), 0 0 24px var(--tile-glow, rgba(94,226,181,0.1)), inset 0 1px 0 rgba(255,255,255,0.05); }
     50%      { box-shadow: 0 0 20px var(--tile-glow, rgba(94,226,181,0.55)), 0 0 50px var(--tile-glow, rgba(94,226,181,0.2)), inset 0 1px 0 rgba(255,255,255,0.05); }
@@ -703,7 +712,8 @@
   .agent-tile-status-dot {
     width: 7px; height: 7px; border-radius: 50%;
   }
-  .agent-tile-status-dot.active { background: var(--brand-mint); animation: pulse-dot 2s ease-in-out infinite; }
+  .agent-tile-status-dot.pulsating { background: var(--brand-mint); animation: pulse-dot 2s ease-in-out infinite; }
+  .agent-tile-status-dot.active { background: var(--brand-mint); opacity: 0.8; }
   .agent-tile-status-dot.idle { background: var(--brand-amber); }
   .agent-tile-status-dot.dormant { background: #555; opacity: 0.5; }
 
@@ -1253,17 +1263,20 @@
       activeAgentName = activityRecent[0].agent_name;
     }
 
-    // Orchestrator center dot (larger, pulsing)
+    // Orchestrator center dot — pulse only when pulsating, solid when active
     const orch = agentMap['orchestrator'];
+    const orchStatus = orch?.status || 'idle';
     const orchDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     orchDot.setAttribute('cx', cx);
     orchDot.setAttribute('cy', cy);
     orchDot.setAttribute('r', 8);
     orchDot.setAttribute('fill', AGENT_COLORS['orchestrator']);
     orchDot.setAttribute('class', 'radar-dot');
-    orchDot.setAttribute('opacity', '0.9');
+    orchDot.setAttribute('opacity', orchStatus === 'pulsating' ? '0.95' : orchStatus === 'active' ? '0.8' : '0.4');
     orchDot.style.cursor = 'pointer';
-    orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="3s" repeatCount="indefinite"/>`;
+    if (orchStatus === 'pulsating') {
+      orchDot.innerHTML = `<animate attributeName="r" values="7;10;7" dur="2.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;1;0.7" dur="2.5s" repeatCount="indefinite"/>`;
+    }
     svg.appendChild(orchDot);
     addTooltip(orchDot, orch);
 
@@ -1317,16 +1330,23 @@
       line.setAttribute('class', 'radar-line');
       svg.appendChild(line);
 
-      // Dot
+      // Dot — pulse when pulsating, solid when active, dim when idle
+      const specStatus = a?.status || 'idle';
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       dot.setAttribute('cx', x);
       dot.setAttribute('cy', y);
       dot.setAttribute('r', 5 + share * 2);
       dot.setAttribute('fill', AGENT_COLORS[name] || '#fff');
       dot.setAttribute('class', 'radar-dot');
-      dot.setAttribute('opacity', '0.85');
+      if (specStatus === 'pulsating') {
+        dot.setAttribute('opacity', '0.9');
+        dot.innerHTML = `<animate attributeName="opacity" values="0.5;1;0.5" dur="${2 + i * 0.3}s" repeatCount="indefinite"/>`;
+      } else if (specStatus === 'active') {
+        dot.setAttribute('opacity', '0.75');
+      } else {
+        dot.setAttribute('opacity', '0.35');
+      }
       dot.style.cursor = 'pointer';
-      dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="${2 + i * 0.3}s" repeatCount="indefinite"/>`;
       svg.appendChild(dot);
       addTooltip(dot, a);
 
@@ -1379,16 +1399,23 @@
           wLine.setAttribute('class', 'radar-line');
           svg.appendChild(wLine);
 
-          // Worker dot
+          // Worker dot — pulse when pulsating, solid when active, dim when idle
+          const wStatus = wa?.status || 'idle';
           const wDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           wDot.setAttribute('cx', wx);
           wDot.setAttribute('cy', wy);
           wDot.setAttribute('r', 3 + wShare * 2);
           wDot.setAttribute('fill', AGENT_COLORS[wName] || '#fff');
           wDot.setAttribute('class', 'radar-dot');
-          wDot.setAttribute('opacity', '0.7');
+          if (wStatus === 'pulsating') {
+            wDot.setAttribute('opacity', '0.85');
+            wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.9;0.4" dur="${2.5 + wi * 0.2}s" repeatCount="indefinite"/>`;
+          } else if (wStatus === 'active') {
+            wDot.setAttribute('opacity', '0.6');
+          } else {
+            wDot.setAttribute('opacity', '0.3');
+          }
           wDot.style.cursor = 'pointer';
-          wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="${2.5 + wi * 0.2}s" repeatCount="indefinite"/>`;
           svg.appendChild(wDot);
           addTooltip(wDot, wa);
 

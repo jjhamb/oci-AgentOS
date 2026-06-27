@@ -30,6 +30,12 @@ BOARD_DB          = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bo
 
 SSE_INTERVAL      = 5   # seconds between SSE pushes
 
+# Orchestrator activity tracking — the orchestrator IS the dashboard operator,
+# so any time the server is serving requests, the orchestrator is "active".
+# Updated on every /api/agents call (which the dashboard polls via SSE).
+_orchestrator_last_active = time.time()
+_orchestrator_lock = threading.Lock()
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -746,6 +752,15 @@ def _map_default_task_to_specialist(title, body):
 
 def agents_data():
     """Return status for all 11 agents based on agent-logs.db activity + kanban."""
+    global _orchestrator_last_active
+    # Update orchestrator activity — the dashboard is being polled, so the
+    # orchestrator (the operator viewing this dashboard) is engaged.
+    try:
+        with _orchestrator_lock:
+            _orchestrator_last_active = time.time()
+    except Exception:
+        pass
+
     try:
         conn = sqlite3.connect(AGENT_LOGS_DB)
         conn.row_factory = sqlite3.Row
@@ -851,17 +866,18 @@ def agents_data():
         kanban_task_titles = {}
         # Track synthetic activity entries generated for default-profile tasks
         # so the orchestrator's kanban delegation logic can attribute work to specialists
-        kanban_specialist_active = set()  # specialist agents with default-profile tasks
+        kanban_specialist_active = set()  # specialist agents with non-done default-profile tasks (ready or running)
+        kanban_specialist_ready = set()   # specialist agents with ready (not yet started) tasks
         try:
             kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
             kconn.execute("PRAGMA query_only=1")
             kconn.row_factory = sqlite3.Row
             kcur = kconn.cursor()
-            # Get ALL running tasks (need body for default→specialist mapping)
+            # Get ALL non-archived tasks including ready/running/done (need body for default→specialist mapping)
             kcur.execute("""
-                SELECT assignee, title, body, created_at, started_at, completed_at
+                SELECT assignee, title, body, created_at, started_at, completed_at, status
                 FROM tasks
-                WHERE status IN ('running', 'done')
+                WHERE status IN ('ready', 'running', 'done', 'blocked')
                   AND assignee IS NOT NULL
                 ORDER BY created_at DESC
             """)
@@ -874,12 +890,14 @@ def agents_data():
                 if assignee == "default":
                     specialist = _map_default_task_to_specialist(t["title"], t.get("body", ""))
                     assignee = specialist
-                    # Only track active (running) tasks for orchestrator glow
+                    # Track ALL non-done tasks (ready + running) for pulsating glow
                     has_started = t.get("started_at") is not None
                     has_completed = t.get("completed_at") is not None
-                    is_running = has_started and not has_completed
-                    if is_running:
+                    is_completed = has_completed
+                    if not is_completed:
                         kanban_specialist_active.add(specialist)
+                        if not has_started:
+                            kanban_specialist_ready.add(specialist)
 
                 # A task is "running" if it has started_at but no completed_at
                 # A task is "done" if it has completed_at
@@ -924,6 +942,9 @@ def agents_data():
 
         # Build agent list
         agents = []
+        # Track which agents are pulsating (for orchestrator delegation glow)
+        pulsating_agents = set()
+
         for name, meta in AGENT_REGISTRY.items():
             stats = db_stats.get(name, {})
             li = last_info.get(name, {})
@@ -931,137 +952,233 @@ def agents_data():
             last_seen = stats.get("last_seen", "")
 
             # Determine status
-            # Determine status
-            # Orchestrator: special logic — tracks its own tasks AND infra's tasks
-            # - active if: any non-done orch tasks, OR any non-done infra tasks, OR last_seen < 2min
-            # - waiting if: all orch+infra tasks done but last completed < 10min ago, OR last_seen 2-10min
-            # - idle if: no relevant tasks and last_seen > 10min
+            # Three-tier model:
+            #   pulsating = task on kanban not yet done (ready/running) — glow animation ON
+            #   active    = task just completed (≤2min ago) — solid glow, no pulse
+            #   idle      = nothing for >2min — dim/flat
+            #
+            # Orchestrator:
+            #   pulsating = any tile pulsating, OR activity within 2min on default channels
+            #   active    = all tasks done, <10min since last activity
+            #   idle      = nothing for >10min
             if name == "orchestrator":
+                # Orchestrator: pulsating if any tile is pulsating OR recent activity
+                # active if all done but <10min, idle if >10min
+                orch_pulsating = False
                 orch_active = False
-                orch_waiting = False
 
-                # Check if any specialist has an active default-profile task
+                # Pulsating if any specialist tile is pulsating (kanban tasks in flight)
                 if kanban_specialist_active:
-                    orch_active = True
+                    orch_pulsating = True
 
-                try:
-                    kconn2 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-                    kconn2.execute("PRAGMA query_only=1")
-                    kconn2.row_factory = sqlite3.Row
-                    kcur2 = kconn2.cursor()
+                # Also pulsating if any specialist just completed (within 2 min grace)
+                # This keeps orchestrator in sync with specialist lifecycle
+                if not orch_pulsating:
+                    for spec_name in AGENT_REGISTRY:
+                        if spec_name == 'orchestrator':
+                            continue
+                        spec = None
+                        for a in agents:
+                            if a['name'] == spec_name:
+                                spec = a
+                                break
+                        if spec and spec.get('status') == 'active':
+                            orch_pulsating = True
+                            break
 
-                    # Check: any non-done tasks for orchestrator OR infra?
-                    kcur2.execute("""
-                        SELECT COUNT(*) as cnt
-                        FROM tasks
-                        WHERE status NOT IN ('done', 'archived')
-                          AND assignee IN ('orchestrator', 'infra')
-                    """)
-                    row = kcur2.fetchone()
-                    if row and row["cnt"] > 0:
-                        orch_active = True
-                    else:
-                        # All done — check most recent completion across both
+                # Also check: any non-done kanban tasks assigned to orchestrator/infra directly
+                if not orch_pulsating:
+                    try:
+                        kconn2 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
+                        kconn2.execute("PRAGMA query_only=1")
+                        kconn2.row_factory = sqlite3.Row
+                        kcur2 = kconn2.cursor()
                         kcur2.execute("""
-                            SELECT MAX(completed_at) as max_completed
+                            SELECT COUNT(*) as cnt
                             FROM tasks
-                            WHERE status = 'done'
+                            WHERE status NOT IN ('done', 'archived')
                               AND assignee IN ('orchestrator', 'infra')
-                              AND completed_at IS NOT NULL
                         """)
-                        row2 = kcur2.fetchone()
-                        if row2 and row2["max_completed"]:
-                            ct = row2["max_completed"]
-                            if isinstance(ct, (int, float)):
-                                completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
-                            else:
-                                completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
-                            age = datetime.now(timezone.utc) - completed_dt
-                            if age < timedelta(minutes=10):
-                                orch_waiting = True
+                        row = kcur2.fetchone()
+                        if row and row["cnt"] > 0:
+                            orch_pulsating = True
+                        kconn2.close()
+                    except Exception:
+                        pass
 
-                    kconn2.close()
-                except Exception:
-                    pass
-
-                # Also factor in last_seen from agent logs (any platform interaction)
-                if last_seen and not orch_active:
+                # Also pulsating if recent activity on default channels (<2min)
+                if not orch_pulsating and last_seen:
                     try:
                         last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
                         if last_dt.tzinfo is None:
                             last_dt = last_dt.replace(tzinfo=timezone.utc)
                         age = datetime.now(timezone.utc) - last_dt
                         if age < timedelta(minutes=2):
-                            orch_active = True
-                        elif age < timedelta(minutes=10) and not orch_waiting:
-                            orch_waiting = True
+                            orch_pulsating = True
                     except Exception:
                         pass
 
-                # Also check Discord session activity
-                if not orch_active and discord_session_active.get(name, False):
-                    orch_active = True
+                # Discord session activity also triggers pulsating
+                if not orch_pulsating and discord_session_active.get(name, False):
+                    orch_pulsating = True
 
-                if orch_active:
-                    status = "active"
-                elif orch_waiting:
-                    status = "waiting"
+                if orch_pulsating:
+                    status = "pulsating"
+                    pulsating_agents.add(name)
                 else:
-                    status = "idle"
-
-            elif kanban_running.get(name, 0) > 0:
-                status = "active"
-            elif discord_session_active.get(name, False):
-                status = "active"
-            elif total == 0:
-                status = "dormant"
-            elif last_seen:
-                # Check if last activity is within 5 minutes
-                try:
-                    last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-                    if last_dt.tzinfo is None:
-                        last_dt = last_dt.replace(tzinfo=timezone.utc)
-                    if datetime.now(timezone.utc) - last_dt < timedelta(minutes=5):
-                        status = "active"
-                    else:
-                        # Also check: recently completed kanban task (within 5 min)?
-                        # This catches agents that did work via delegate_task
+                    # All done — check how long since last activity
+                    try:
+                        last_activity_ts = None
                         try:
-                            kconn3 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
-                            kconn3.execute("PRAGMA query_only=1")
-                            kconn3.row_factory = sqlite3.Row
-                            kcur3 = kconn3.cursor()
-                            kcur3.execute("""
+                            kconn2 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
+                            kconn2.execute("PRAGMA query_only=1")
+                            kconn2.row_factory = sqlite3.Row
+                            kcur2 = kconn2.cursor()
+                            kcur2.execute("""
                                 SELECT MAX(completed_at) as max_completed
                                 FROM tasks
                                 WHERE status = 'done'
-                                  AND assignee = ?
+                                  AND assignee IN ('orchestrator', 'infra')
                                   AND completed_at IS NOT NULL
-                            """, (name,))
-                            row3 = kcur3.fetchone()
-                            if row3 and row3["max_completed"]:
-                                ct = row3["max_completed"]
+                            """)
+                            row2 = kcur2.fetchone()
+                            if row2 and row2["max_completed"]:
+                                ct = row2["max_completed"]
                                 if isinstance(ct, (int, float)):
-                                    completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
+                                    last_activity_ts = datetime.fromtimestamp(ct, tz=timezone.utc)
                                 else:
-                                    completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
-                                    if completed_dt.tzinfo is None:
-                                        completed_dt = completed_dt.replace(tzinfo=timezone.utc)
-                                age = datetime.now(timezone.utc) - completed_dt
-                                if age < timedelta(minutes=5):
-                                    status = "active"
-                                else:
-                                    status = "idle"
+                                    last_activity_ts = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
+                            kconn2.close()
+                        except Exception:
+                            pass
+
+                        # Use whichever is more recent: last_seen or last task completion
+                        last_dt = None
+                        if last_seen:
+                            try:
+                                last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                                if last_dt.tzinfo is None:
+                                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                            except Exception:
+                                pass
+                        if last_activity_ts and (last_dt is None or last_activity_ts > last_dt):
+                            last_dt = last_activity_ts
+
+                        # Orchestrator IS the dashboard operator — use server's own
+                        # activity timestamp (updated on every /api/agents SSE poll)
+                        # This is the most reliable signal that someone is actively
+                        # using the dashboard (and thus the orchestrator is engaged).
+                        try:
+                            with _orchestrator_lock:
+                                orch_age = time.time() - _orchestrator_last_active
+                            if orch_age < 600:  # 10 min window
+                                last_dt = datetime.fromtimestamp(
+                                    _orchestrator_last_active, tz=timezone.utc
+                                )
+                        except Exception:
+                            pass
+
+                        if last_dt:
+                            age = datetime.now(timezone.utc) - last_dt
+                            if age < timedelta(minutes=10):
+                                status = "active"
                             else:
                                 status = "idle"
-                            kconn3.close()
-                        except Exception:
+                        else:
                             status = "idle"
-                except Exception:
-                    status = "idle"
+                    except Exception:
+                        status = "idle"
+
             else:
-                status = "dormant"
-                status = "dormant"
+                # Specialist agents (including infra's workers):
+                # pulsating = has a kanban task that is not done (ready/running)
+                # active = most recent task completed within 2 min
+                # idle = nothing for >2 min
+
+                is_pulsating = False
+                has_recent_completion = False
+
+                # Check if this agent has a running kanban task
+                if kanban_running.get(name, 0) > 0:
+                    is_pulsating = True
+
+                # Also check default-profile tasks remapped to this specialist
+                if not is_pulsating and name in kanban_specialist_active:
+                    is_pulsating = True
+
+                if is_pulsating:
+                    status = "pulsating"
+                    pulsating_agents.add(name)
+                else:
+                    # Check if any task completed within last 2 min
+                    # Need to check direct assignee tasks; for 'default' tasks we map by title
+                    try:
+                        kconn3 = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
+                        kconn3.execute("PRAGMA query_only=1")
+                        kconn3.row_factory = sqlite3.Row
+                        kcur3 = kconn3.cursor()
+                        # First: check direct assignee
+                        kcur3.execute("""
+                            SELECT MAX(completed_at) as max_completed
+                            FROM tasks
+                            WHERE status = 'done'
+                              AND assignee = ?
+                              AND completed_at IS NOT NULL
+                        """, (name,))
+                        row3 = kcur3.fetchone()
+                        max_ct = None
+                        if row3 and row3["max_completed"]:
+                            max_ct = row3["max_completed"]
+                        # Second: check default-assignee tasks that map to this specialist
+                        kcur3.execute("""
+                            SELECT id, title, completed_at
+                            FROM tasks
+                            WHERE status = 'done'
+                              AND assignee = 'default'
+                              AND completed_at IS NOT NULL
+                            ORDER BY completed_at DESC LIMIT 5
+                        """)
+                        for r in kcur3.fetchall():
+                            specialist = _map_default_task_to_specialist(r["title"], "")
+                            if specialist == name:
+                                if max_ct is None or r["completed_at"] > max_ct:
+                                    max_ct = r["completed_at"]
+                                break  # most recent matching task
+                        kconn3.close()
+                        if max_ct:
+                            ct = max_ct
+                            if isinstance(ct, (int, float)):
+                                completed_dt = datetime.fromtimestamp(ct, tz=timezone.utc)
+                            else:
+                                completed_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
+                                if completed_dt.tzinfo is None:
+                                    completed_dt = completed_dt.replace(tzinfo=timezone.utc)
+                            age = datetime.now(timezone.utc) - completed_dt
+                            if age < timedelta(minutes=2):
+                                has_recent_completion = True
+                    except Exception:
+                        pass
+
+                    # Also check last_seen within 2 min as fallback for activity
+                    if not has_recent_completion and last_seen:
+                        try:
+                            last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                            if last_dt.tzinfo is None:
+                                last_dt = last_dt.replace(tzinfo=timezone.utc)
+                            age = datetime.now(timezone.utc) - last_dt
+                            if age < timedelta(minutes=2):
+                                has_recent_completion = True
+                        except Exception:
+                            pass
+
+                    if has_recent_completion:
+                        status = "active"
+                    elif total == 0:
+                        status = "dormant"
+                    elif discord_session_active.get(name, False):
+                        status = "active"
+                    else:
+                        status = "idle"
 
             # Task display: prefer kanban running task title, fall back to last log entry
             last_task = li.get("task", "")
@@ -1088,8 +1205,8 @@ def agents_data():
         return {
             "agents": agents,
             "total": len(agents),
+            "pulsating": sum(1 for a in agents if a["status"] == "pulsating"),
             "active": sum(1 for a in agents if a["status"] == "active"),
-            "waiting": sum(1 for a in agents if a["status"] == "waiting"),
             "idle": sum(1 for a in agents if a["status"] == "idle"),
             "dormant": sum(1 for a in agents if a["status"] == "dormant"),
         }

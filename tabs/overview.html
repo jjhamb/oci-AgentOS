@@ -782,28 +782,37 @@
       activeAgentName = activityRecent[0].agent_name;
     }
 
-    // Orchestrator center dot (larger, pulsing)
+    // Orchestrator center dot (larger, pulsating only when active work)
     const orch = agentMap['orchestrator'];
+    const orchStatus = orch?.status || 'idle';
     const orchDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     orchDot.setAttribute('cx', cx);
     orchDot.setAttribute('cy', cy);
     orchDot.setAttribute('r', 8);
     orchDot.setAttribute('fill', AGENT_COLORS['orchestrator']);
     orchDot.setAttribute('class', 'radar-dot');
-    orchDot.setAttribute('opacity', '0.9');
     orchDot.style.cursor = 'pointer';
-    orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="3s" repeatCount="indefinite"/>`;
+    if (orchStatus === 'pulsating') {
+      orchDot.setAttribute('opacity', '1');
+      orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="1.5s" repeatCount="indefinite"/>`;
+    } else if (orchStatus === 'active') {
+      orchDot.setAttribute('opacity', '0.9');
+    } else {
+      orchDot.setAttribute('opacity', '0.4');
+    }
     svg.appendChild(orchDot);
     addTooltip(orchDot, orch);
 
-    // Flash active agent with expanding ring
-    if (activeAgentName && agentMap[activeAgentName]) {
+    // Flash active agent with expanding ring — only when a pulsating agent exists
+    const pulsatingAgent = agents.find(a => a.status === 'pulsating');
+    if (pulsatingAgent) {
+      const paColor = AGENT_COLORS[pulsatingAgent.name] || '#fff';
       const activeDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       activeDot.setAttribute('cx', cx);
       activeDot.setAttribute('cy', cy);
       activeDot.setAttribute('r', 14);
       activeDot.setAttribute('fill', 'none');
-      activeDot.setAttribute('stroke', AGENT_COLORS[activeAgentName] || '#fff');
+      activeDot.setAttribute('stroke', paColor);
       activeDot.setAttribute('stroke-width', '1');
       activeDot.setAttribute('opacity', '0.6');
       activeDot.innerHTML = `<animate attributeName="r" values="10;18;10" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite"/>`;
@@ -846,16 +855,23 @@
       line.setAttribute('class', 'radar-line');
       svg.appendChild(line);
 
-      // Dot
+      // Dot — animate only when pulsating
+      const dotStatus = a?.status || 'idle';
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       dot.setAttribute('cx', x);
       dot.setAttribute('cy', y);
       dot.setAttribute('r', 5 + share * 2);
       dot.setAttribute('fill', AGENT_COLORS[name] || '#fff');
       dot.setAttribute('class', 'radar-dot');
-      dot.setAttribute('opacity', '0.85');
       dot.style.cursor = 'pointer';
-      dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="${2 + i * 0.3}s" repeatCount="indefinite"/>`;
+      if (dotStatus === 'pulsating') {
+        dot.setAttribute('opacity', '1');
+        dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>`;
+      } else if (dotStatus === 'active') {
+        dot.setAttribute('opacity', '0.85');
+      } else {
+        dot.setAttribute('opacity', '0.35');
+      }
       svg.appendChild(dot);
       addTooltip(dot, a);
 
@@ -908,16 +924,23 @@
           wLine.setAttribute('class', 'radar-line');
           svg.appendChild(wLine);
 
-          // Worker dot
+          // Worker dot — animate only when pulsating
+          const wStatus = wa?.status || 'idle';
           const wDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           wDot.setAttribute('cx', wx);
           wDot.setAttribute('cy', wy);
           wDot.setAttribute('r', 3 + wShare * 2);
           wDot.setAttribute('fill', AGENT_COLORS[wName] || '#fff');
           wDot.setAttribute('class', 'radar-dot');
-          wDot.setAttribute('opacity', '0.7');
           wDot.style.cursor = 'pointer';
-          wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="${2.5 + wi * 0.2}s" repeatCount="indefinite"/>`;
+          if (wStatus === 'pulsating') {
+            wDot.setAttribute('opacity', '1');
+            wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.5s" repeatCount="indefinite"/>`;
+          } else if (wStatus === 'active') {
+            wDot.setAttribute('opacity', '0.7');
+          } else {
+            wDot.setAttribute('opacity', '0.3');
+          }
           svg.appendChild(wDot);
           addTooltip(wDot, wa);
 
