@@ -512,6 +512,182 @@
     border-radius: var(--radius-md);
   }
 
+  /* ═══════════════════════════════════════════
+     CONTENT TAB
+     ═══════════════════════════════════════════ */
+  .content-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+  .content-eyebrow {
+    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    color: var(--text-muted); letter-spacing: var(--letter-spacing-wide); text-transform: uppercase;
+  }
+  .content-title {
+    font-family: var(--font-display); font-size: var(--font-size-3xl);
+    font-weight: 700; color: var(--text-primary); line-height: 1.1; margin-top: var(--space-1);
+  }
+  .content-layout {
+    display: flex; gap: var(--space-3);
+    height: calc(100vh - 200px); min-height: 500px;
+  }
+  .content-sidebar {
+    width: 320px; min-width: 200px; flex-shrink: 0;
+    display: flex; flex-direction: column;
+    background: rgba(31,31,43,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: var(--space-3);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: var(--space-2);
+  }
+  .sidebar-breadcrumb {
+    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    color: var(--text-muted); flex: 1; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+  }
+  .sidebar-up-btn {
+    padding: 3px 8px; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: var(--text-muted);
+    border-radius: var(--radius-sm); cursor: pointer;
+    font-size: var(--font-size-xs); font-family: var(--font-mono);
+    transition: all var(--transition-fast);
+  }
+  .sidebar-up-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+  .sidebar-search {
+    margin: var(--space-2) var(--space-3);
+    padding: var(--space-1) var(--space-2);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono); font-size: var(--font-size-sm);
+    outline: none; width: calc(100% - 2 * var(--space-3));
+  }
+  .sidebar-search::placeholder { color: var(--text-muted); }
+  .sidebar-search:focus { border-color: rgba(139,92,246,0.4); }
+  .sidebar-files {
+    flex: 1; overflow-y: auto; padding: var(--space-1) 0;
+  }
+  .file-entry {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 6px var(--space-3); cursor: pointer;
+    transition: all var(--transition-fast);
+    border-left: 2px solid transparent;
+  }
+  .file-entry:hover { background: rgba(255,255,255,0.04); }
+  .file-entry.selected {
+    background: rgba(255,255,255,0.06);
+    border-left-color: var(--brand-violet-glow);
+  }
+  .file-entry-dir { color: var(--brand-amber); }
+  .file-entry-file { color: var(--text-muted); }
+  .file-icon { font-size: var(--font-size-base); flex-shrink: 0; width: 20px; text-align: center; }
+  .file-name { font-size: var(--font-size-sm); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .file-meta { font-size: 9px; color: var(--text-muted); flex-shrink: 0; }
+
+  .content-resizer {
+    width: 4px; cursor: col-resize;
+    background: rgba(255,255,255,0.04);
+    transition: background var(--transition-fast);
+    flex-shrink: 0;
+  }
+  .content-resizer:hover, .content-resizer.active { background: rgba(139,92,246,0.3); }
+
+  .content-preview {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    background: rgba(31,31,43,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .preview-header {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: var(--space-3);
+    flex-shrink: 0;
+  }
+  .preview-title {
+    font-family: var(--font-display); font-size: var(--font-size-lg);
+    color: var(--text-primary); flex: 1; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+  }
+  .preview-path {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; max-width: 300px;
+  }
+  .preview-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+  .preview-btn {
+    padding: 4px 12px; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: var(--text-muted);
+    border-radius: var(--radius-sm); cursor: pointer;
+    font-size: var(--font-size-xs); font-family: var(--font-mono);
+    transition: all var(--transition-fast);
+  }
+  .preview-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+  .preview-btn.active { background: rgba(139,92,246,0.2); color: var(--brand-violet-glow); border-color: rgba(139,92,246,0.3); }
+
+  .preview-body {
+    flex: 1; overflow-y: auto; padding: var(--space-4);
+  }
+  .preview-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--text-muted); gap: var(--space-2);
+  }
+  .preview-empty-icon { font-size: 48px; opacity: 0.3; }
+
+  .preview-md { font-family: var(--font-display); line-height: 1.7; }
+  .preview-md h1 { font-size: 28px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary); }
+  .preview-md h2 { font-size: 22px; font-weight: 600; margin: 24px 0 12px; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; }
+  .preview-md h3 { font-size: 18px; font-weight: 600; margin: 20px 0 10px; color: var(--text-primary); }
+  .preview-md p { margin: 12px 0; color: var(--text-primary); font-size: 15px; }
+  .preview-md ul, .preview-md ol { margin: 12px 0; padding-left: 24px; }
+  .preview-md li { margin: 6px 0; color: var(--text-primary); font-size: 15px; }
+  .preview-md code { font-family: var(--font-mono); font-size: 13px; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--brand-pink); }
+  .preview-md pre { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-md); padding: 16px; overflow-x: auto; margin: 16px 0; }
+  .preview-md pre code { background: none; padding: 0; color: var(--text-primary); }
+  .preview-md a { color: var(--brand-cyan); text-decoration: none; }
+  .preview-md a:hover { text-decoration: underline; }
+  .preview-md blockquote { border-left: 3px solid var(--brand-violet); padding-left: 16px; margin: 16px 0; color: var(--text-muted); }
+  .preview-md table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .preview-md th, .preview-md td { padding: 8px 12px; border: 1px solid rgba(255,255,255,0.08); text-align: left; }
+  .preview-md th { background: rgba(255,255,255,0.04); font-weight: 600; }
+  .preview-md img { max-width: 100%; border-radius: var(--radius-md); margin: 16px 0; }
+
+  .preview-code {
+    font-family: var(--font-mono); font-size: var(--font-size-sm);
+    line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    background: rgba(0,0,0,0.2); padding: var(--space-4);
+    border-radius: var(--radius-md);
+  }
+  .preview-text {
+    font-family: var(--font-mono); font-size: var(--font-size-sm);
+    line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  }
+  .preview-edit {
+    width: 100%; height: 100%; min-height: 400px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    color: var(--text-primary);
+    font-family: var(--font-mono); font-size: var(--font-size-sm);
+    line-height: 1.6; resize: vertical; outline: none;
+  }
+  .preview-edit:focus { border-color: rgba(139,92,246,0.4); }
+  .preview-save-bar {
+    padding: var(--space-2) var(--space-4);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-shrink: 0;
+  }
+  .save-status { font-size: var(--font-size-xs); color: var(--text-muted); flex: 1; }
+
   /* Glass Card */
   .glass-card {
     background: rgba(31,31,43,0.5);
@@ -1512,7 +1688,41 @@
     </div>
   </div>
   <div class="tab-panel" id="panel-content">
-    <div class="glass-card"><div class="empty-state"><div class="icon">📁</div><div>Content — documents + storage</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 28–29 build this panel</div></div></div>
+    <div class="content-header">
+      <div><div class="content-eyebrow">Mission Control</div><div class="content-title">Content</div></div>
+    </div>
+    <div class="content-layout" id="contentLayout">
+      <div class="content-sidebar" id="contentSidebar">
+        <div class="sidebar-header">
+          <button class="sidebar-up-btn" id="btnDirUp" title="Go up one directory">↑ Up</button>
+          <span class="sidebar-breadcrumb" id="sidebarBreadcrumb">/home/jayant</span>
+        </div>
+        <input type="text" class="sidebar-search" id="sidebarSearch" placeholder="Filter files…">
+        <div class="sidebar-files" id="sidebarFiles">
+          <div style="padding:16px;color:var(--text-muted);font-size:var(--font-size-sm)">Loading…</div>
+        </div>
+      </div>
+      <div class="content-resizer" id="contentResizer"></div>
+      <div class="content-preview" id="contentPreview">
+        <div class="preview-header">
+          <span class="preview-title" id="previewTitle">No file selected</span>
+          <span class="preview-path" id="previewPath"></span>
+          <div class="preview-actions" id="previewActions" style="display:none">
+            <button class="preview-btn" id="btnView">View</button>
+            <button class="preview-btn" id="btnEdit">Edit</button>
+            <button class="preview-btn" id="btnDownload">Download</button>
+          </div>
+        </div>
+        <div class="preview-body" id="previewBody">
+          <div class="preview-empty"><div class="preview-empty-icon">📄</div><div>Select a file to preview</div></div>
+        </div>
+        <div class="preview-save-bar" id="previewSaveBar" style="display:none">
+          <span class="save-status" id="saveStatus"></span>
+          <button class="preview-btn" id="btnSave">Save</button>
+          <button class="preview-btn" id="btnCancelEdit">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2633,6 +2843,210 @@
       fetchCron();
     }
   }, 30000);
+
+  // ── Content Tab ──
+  const isContentStandalone = isStandalone;
+  let currentDir = '/home/jayant';
+  let currentFile = null;
+  let currentFileContent = '';
+  let isEditMode = false;
+
+  function getFileIcon(entry) {
+    if (entry.is_dir) return '📁';
+    const ext = entry.ext;
+    const icons = {
+      '.md': '📝', '.txt': '📄', '.py': '🐍', '.js': '�', '.sh': '⚙️',
+      '.bash': '�️', '.yaml': '�', '.yml': '📋', '.json': '📋', '.xml': '📋',
+      '.html': '🌐', '.css': '�', '.csv': '📊', '.sql': '🗃️', '.log': '📃',
+      '.pdf': '📕', '.docx': '📘', '.xlsx': '📗', '.pptx': '📙',
+      '.png': '�️', '.jpg': '�️', '.jpeg': '🖼️', '.gif': '🖼️', '.webp': '�️', '.svg': '🖼️',
+      '.zip': '📦', '.tar': '📦', '.gz': '📦',
+      '.conf': '⚙️', '.cfg': '⚙️', '.ini': '⚙️', '.env': '🔒',
+    };
+    return icons[ext] || '📄';
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function loadDir(dirPath) {
+    if (isContentStandalone) return;
+    fetch('/api/content/list?path=' + encodeURIComponent(dirPath))
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        currentDir = data.path;
+        renderDir(data);
+      })
+      .catch(err => {
+        document.getElementById('sidebarFiles').innerHTML =
+          '<div style="padding:16px;color:var(--brand-red);font-size:var(--font-size-sm)">Error: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  function renderDir(data) {
+    document.getElementById('sidebarBreadcrumb').textContent = data.path;
+    currentDir = data.path;
+    const filter = (document.getElementById('sidebarSearch').value || '').toLowerCase();
+    let entries = data.entries || [];
+    if (filter) entries = entries.filter(e => e.name.toLowerCase().includes(filter));
+    if (entries.length === 0) {
+      document.getElementById('sidebarFiles').innerHTML =
+        '<div style="padding:16px;color:var(--text-muted);font-size:var(--font-size-sm)">Empty directory</div>';
+      return;
+    }
+    document.getElementById('sidebarFiles').innerHTML = entries.map(entry => {
+      const icon = getFileIcon(entry);
+      const isDir = entry.is_dir;
+      const size = isDir ? '' : formatSize(entry.size);
+      return '<div class="file-entry ' + (isDir ? 'file-entry-dir' : 'file-entry-file') + '" data-path="' + escapeHtml(entry.path) + '" data-dir="' + isDir + '">' +
+        '<span class="file-icon">' + icon + '</span>' +
+        '<span class="file-name">' + escapeHtml(entry.name) + '</span>' +
+        '<span class="file-meta">' + size + '</span>' +
+      '</div>';
+    }).join('');
+
+    document.querySelectorAll('#sidebarFiles .file-entry').forEach(el => {
+      el.addEventListener('click', () => {
+        const path = el.dataset.path;
+        const isDir = el.dataset.dir === 'true';
+        if (isDir) { loadDir(path); } else { loadFile(path); }
+        document.querySelectorAll('#sidebarFiles .file-entry').forEach(e => e.classList.remove('selected'));
+        el.classList.add('selected');
+      });
+    });
+  }
+
+  function loadFile(filePath) {
+    if (isContentStandalone) return;
+    currentFile = filePath;
+    isEditMode = false;
+    document.getElementById('previewSaveBar').style.display = 'none';
+    document.getElementById('previewActions').style.display = 'none';
+    document.getElementById('previewTitle').textContent = filePath.split('/').pop();
+    document.getElementById('previewPath').textContent = filePath;
+    document.getElementById('previewBody').innerHTML =
+      '<div class="preview-empty"><div class="preview-empty-icon">⏳</div><div>Loading…</div></div>';
+
+    fetch('/api/content/get?path=' + encodeURIComponent(filePath))
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => { renderFile(data); })
+      .catch(err => {
+        document.getElementById('previewBody').innerHTML =
+          '<div class="preview-empty"><div style="color:var(--brand-red)">Error: ' + escapeHtml(err.message) + '</div></div>';
+      });
+  }
+
+  function renderFile(data) {
+    currentFileContent = data.content || '';
+    const type = data.type;
+    const ext = data.ext;
+    const body = document.getElementById('previewBody');
+    const actions = document.getElementById('previewActions');
+
+    actions.style.display = 'flex';
+    document.getElementById('btnView').classList.add('active');
+    document.getElementById('btnEdit').classList.remove('active');
+
+    if (type === 'image') {
+      body.innerHTML = '<div class="preview-image"><img src="data:' + (data.mime || 'image/png') + ';base64,' + data.content + '" alt="' + escapeHtml(currentFile) + '"></div>';
+    } else if (type === 'text' && ext === '.md') {
+      body.innerHTML = '<div class="preview-md">' + escapeHtml(data.content) + '</div>';
+    } else if (type === 'text' || type === 'pdf' || type === 'docx' || type === 'xlsx') {
+      body.innerHTML = '<div class="preview-code">' + escapeHtml(data.content) + '</div>';
+    } else if (type === 'binary') {
+      body.innerHTML = '<div class="preview-empty"><div class="preview-empty-icon">📦</div><div>Binary file — preview not available</div><div style="font-size:var(--font-size-xs);margin-top:8px">Use Download to open</div></div>';
+    } else {
+      body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
+    }
+  }
+
+  document.getElementById('btnEdit').addEventListener('click', () => {
+    if (!currentFile) return;
+    isEditMode = true;
+    document.getElementById('btnView').classList.remove('active');
+    document.getElementById('btnEdit').classList.add('active');
+    document.getElementById('previewSaveBar').style.display = 'flex';
+    document.getElementById('saveStatus').textContent = '';
+    document.getElementById('previewBody').innerHTML =
+      '<textarea class="preview-edit" id="editTextarea">' + escapeHtml(currentFileContent) + '</textarea>';
+  });
+
+  document.getElementById('btnView').addEventListener('click', () => {
+    if (!currentFile || !isEditMode) return;
+    isEditMode = false;
+    document.getElementById('previewSaveBar').style.display = 'none';
+    renderFile({ type: 'text', content: currentFileContent, ext: currentFile.split('.').pop() });
+  });
+
+  document.getElementById('btnSave').addEventListener('click', () => {
+    if (!currentFile) return;
+    const content = document.getElementById('editTextarea').value;
+    document.getElementById('saveStatus').textContent = 'Saving…';
+    if (isContentStandalone) {
+      setTimeout(() => {
+        currentFileContent = content;
+        document.getElementById('saveStatus').textContent = 'Saved ✓';
+        setTimeout(() => { document.getElementById('saveStatus').textContent = ''; }, 2000);
+      }, 500);
+      return;
+    }
+    fetch('/api/content/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentFile, content: content })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          currentFileContent = content;
+          document.getElementById('saveStatus').textContent = 'Saved ✓';
+          setTimeout(() => { document.getElementById('saveStatus').textContent = ''; }, 2000);
+        } else {
+          document.getElementById('saveStatus').textContent = 'Error: ' + (data.error || 'unknown');
+        }
+      })
+      .catch(err => {
+        document.getElementById('saveStatus').textContent = 'Error: ' + err.message;
+      });
+  });
+
+  document.getElementById('btnCancelEdit').addEventListener('click', () => {
+    isEditMode = false;
+    document.getElementById('previewSaveBar').style.display = 'none';
+    document.getElementById('btnView').click();
+  });
+
+  document.getElementById('btnDownload').addEventListener('click', () => {
+    if (!currentFile) return;
+    if (isContentStandalone) return;
+    window.open('/api/content/download?path=' + encodeURIComponent(currentFile), '_blank');
+  });
+
+  document.getElementById('btnDirUp').addEventListener('click', () => {
+    const parent = currentDir.split('/').slice(0, -1).join('/') || '/';
+    loadDir(parent);
+  });
+
+  document.getElementById('sidebarSearch').addEventListener('input', () => {
+    loadDir(currentDir);
+  });
+
+  // Content tab observer — load content when tab becomes visible
+  const contentObserver = new MutationObserver(() => {
+    const panel = document.getElementById('panel-content');
+    if (panel && panel.classList.contains('active') && !window._contentLoaded) {
+      window._contentLoaded = true;
+      loadDir('/home/jayant');
+    }
+  });
+  contentObserver.observe(document.getElementById('panel-content'), { attributes: true, attributeFilter: ['class'] });
+  if (document.getElementById('panel-content').classList.contains('active')) {
+    window._contentLoaded = true;
+    loadDir('/home/jayant');
+  }
 
   // ── Tasks Tab ──
   const STATUS_COLUMNS = ['triage', 'todo', 'ready', 'running', 'blocked', 'done'];
