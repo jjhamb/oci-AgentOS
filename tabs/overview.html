@@ -1540,6 +1540,7 @@
     const failed24h = rate24h.failed_24h ?? totals.failed ?? 0;
     const messages24h = rate24h.messages_24h ?? (sessions.message_count || 0);
     const tokens24h = rate24h.tokens_24h || tokens;
+    const cost24h = rate24h.cost_24h ?? 0;
 
     // Integrity — real success rate (24h completed / total, excluding synthetics)
     const integrityTotal = calls24h;
@@ -1572,7 +1573,6 @@
     // Footer
     const activeTasks = window._rateData?.active_tasks ?? 0;
     const sessions24h = window._rateData24h?.sessions_24h ?? (sessions.session_count || 0);
-    const cost24h = window._rateData24h?.cost_24h ?? 0;
 
     document.getElementById('footerQueue').textContent = activeTasks;
     document.getElementById('footerSessions').textContent = sessions24h.toLocaleString();
