@@ -1867,12 +1867,16 @@ class Handler(BaseHTTPRequestHandler):
                 result['calls_per_key_per_day'] = 200
                 result['total_quota'] = len(pool) * 200
 
-                # Calls today — sum api_call_count from state.db sessions
-                # This is the real metric: actual LLM API calls made
+                # Calls today — aligned to OpenRouter's UTC midnight reset
+                # OpenRouter resets at 00:00 UTC daily
                 conn = sqlite3.connect(STATE_DB)
                 cur = conn.cursor()
-                cur.execute("SELECT COALESCE(SUM(api_call_count), 0) FROM sessions WHERE started_at > strftime('%s','now','-1 day')")
+                cur.execute("SELECT COALESCE(SUM(api_call_count), 0) FROM sessions WHERE started_at > strftime('%s','now','start of day')")
                 result['calls_today'] = cur.fetchone()[0]
+
+                # Hours until next UTC midnight reset
+                cur.execute("SELECT CAST((strftime('%s','now','start of day','+1 day') - strftime('%s','now')) / 3600 AS INTEGER)")
+                result['hours_until_reset'] = cur.fetchone()[0]
                 conn.close()
 
                 # Per-key usage (from auth.json request_count)

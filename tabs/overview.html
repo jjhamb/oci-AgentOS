@@ -1663,7 +1663,12 @@
           else if (pct > 70) quotaBar.style.background = 'var(--brand-amber)';
           else quotaBar.style.background = 'var(--brand-mint)';
         }
-        if (quotaText) quotaText.textContent = `${data.calls_today ?? 0} / ${data.total_quota ?? 0}`;
+        if (quotaText) {
+          const used = data.calls_today ?? 0;
+          const total = data.total_quota ?? 0;
+          const hrs = data.hours_until_reset;
+          quotaText.textContent = `${used} / ${total}` + (hrs != null ? ` · resets in ${Math.floor(hrs)}h ${Math.round((hrs % 1) * 60)}m` : '');
+        }
         if (dot) {
           const status = data.active_key ? data.active_key.status : 'unknown';
           dot.style.background = status === 'ok' ? 'var(--brand-mint)' : status === 'rate_limited' ? 'var(--brand-red)' : 'var(--brand-amber)';
