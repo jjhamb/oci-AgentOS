@@ -716,20 +716,30 @@ def _map_default_task_to_specialist(title, body):
     if no specialist keyword matches.
     """
     text = f"{title} {body}".lower()
-    
+
     # Specialist role keywords (order matters — first match wins)
+    # More specific agents listed BEFORE generic keywords that could match multiple
     specialist_keywords = [
-        ("analyst", ["analyst", "research", "analysis", "market intel", "brief"]),
-        ("writer", ["writer", "blog", "content", "copy", "script", "article", "write"]),
-        ("coder", ["coder", "code", "build", "debug", "deploy", "fix", "implement", "ec2", "apache", "ses"]),
-        ("marketer", ["marketer", "campaign", "promotion", "social media", "strategy", "brand"]),
+        # Primary specialists (4)
+        ("analyst", ["analyst", "research", "analysis", "market intel", "brief", "study", "trends"]),
+        ("writer", ["writer", "blog", "content", "copy", "script", "article", "draft"]),
+        ("coder", ["coder", "debug", "deploy", "implement", "ec2", "apache", "ses"]),
+        ("marketer", ["marketer", "campaign", "promotion", "social media", "brand", "growth"]),
+        # Infra workers (5) — specific keywords first
+        ("infra", ["infra", "infrastructure", "server load", "uptime", "disk usage", "memory usage"]),
+        ("executor", ["executor", "list files", "directory listing", "run command"]),
+        ("sentinel", ["sentinel", "port status", "port check", "security scan"]),
+        ("web", ["web", "website", "dns", "domain", "french.jhamb", "reachable"]),
+        ("publisher", ["publisher", "publish", "report", "working directory"]),
+        ("reviewer", ["reviewer", "review", "validate", "qa", "quality check"]),
+        # Orchestrator last (catch-all for coordination tasks)
+        ("orchestrator", ["orchestrator", "orchestration", "count tasks", "pipeline", "verify"]),
     ]
-    
     for agent_name, keywords in specialist_keywords:
         for kw in keywords:
             if kw in text:
                 return agent_name
-    
+
     # Default: orchestrator handles it directly
     return "orchestrator"
 
