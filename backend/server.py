@@ -1848,8 +1848,8 @@ class Handler(BaseHTTPRequestHandler):
 
                 # Total key count and quota
                 result['total_keys'] = len(pool)
-                result['calls_per_key_per_day'] = 1000
-                result['total_quota'] = len(pool) * 1000
+                result['calls_per_key_per_day'] = 200
+                result['total_quota'] = len(pool) * 200
 
                 # Calls today — count sessions started in last 24h
                 conn = sqlite3.connect(STATE_DB)
