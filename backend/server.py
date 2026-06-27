@@ -1589,7 +1589,12 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with open(html_path, "r") as f:
                     html = f.read()
-                self._send(200, html, "text/html; charset=utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.end_headers()
+                self.wfile.write(html.encode("utf-8"))
             except FileNotFoundError:
                 self._send_json(404, {"error": "index.html not found"})
             return
@@ -1601,7 +1606,12 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with open(tab_path, "r") as f:
                     html = f.read()
-                self._send(200, html, "text/html; charset=utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.end_headers()
+                self.wfile.write(html.encode("utf-8"))
             except FileNotFoundError:
                 self._send_json(404, {"error": f"tab {tab_name} not found"})
             return
@@ -1714,41 +1724,35 @@ class Handler(BaseHTTPRequestHandler):
                 min_ago = now_ts - 60
                 day_ago = now_ts - 86400
 
-                # Agent calls in last 60s (agent_logs.created_at is ISO text)
+                # Session + message data from STATE_DB
+                conn2 = sqlite3.connect(STATE_DB)
+                conn2.row_factory = sqlite3.Row
+                cur2 = conn2.cursor()
+
+                # Hourly trend over 24h (more meaningful than per-minute with session-granularity data)
+                cur2.execute("""
+                    SELECT CAST((started_at - ?) / 3600 AS INTEGER) as hour_bucket,
+                           COUNT(*) as calls,
+                           COALESCE(SUM(input_tokens + output_tokens), 0) as tokens,
+                           COALESCE(SUM(message_count), 0) as msgs
+                    FROM sessions
+                    WHERE started_at > ?
+                    GROUP BY hour_bucket
+                    ORDER BY hour_bucket
+                """, (day_ago, day_ago))
+                hourly = [{'hour': r[0], 'calls': r[1], 'tokens': r[2], 'messages': r[3]} for r in cur2.fetchall()]
+                result['hourly'] = hourly
+                result['sessions_24h'] = sum(d['calls'] for d in hourly)
+                result['calls_24h'] = sum(d['calls'] for d in hourly)
+
+                # Per-minute: use agent_logs for short-term activity (task runs)
                 conn = sqlite3.connect(AGENT_LOGS_DB)
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-1 minute')")
                 result['calls_per_min'] = cur.fetchone()[0]
-
-                # Failures in last 60s
                 cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-1 minute')")
                 result['failures_per_min'] = cur.fetchone()[0]
-
-                # 24h totals for corrected stat tiles
-                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-24 hours')")
-                result['calls_24h'] = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='completed' AND created_at > datetime('now', '-24 hours')")
-                result['completed_24h'] = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-24 hours')")
-                result['failed_24h'] = cur.fetchone()[0]
                 conn.close()
-
-                # Messages in last 60s + 24h (messages.timestamp is REAL unix epoch)
-                conn2 = sqlite3.connect(STATE_DB)
-                conn2.row_factory = sqlite3.Row
-                cur2 = conn2.cursor()
-                cur2.execute("SELECT COUNT(*) FROM messages WHERE timestamp > ?", (min_ago,))
-                result['messages_per_min'] = cur2.fetchone()[0]
-                cur2.execute("SELECT COUNT(*) FROM messages WHERE timestamp > ?", (day_ago,))
-                result['messages_24h'] = cur2.fetchone()[0]
-
-                # Token throughput in last 60s (sessions.started_at is REAL unix epoch)
-                cur2.execute("""
-                    SELECT COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0)
-                    FROM sessions
-                    WHERE started_at > ?
-                """, (min_ago,))
-                result['tokens_per_min'] = cur2.fetchone()[0]
 
                 # Token totals 24h
                 cur2.execute("""
@@ -1762,10 +1766,6 @@ class Handler(BaseHTTPRequestHandler):
                 # Active sessions in last 60s
                 cur2.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (min_ago,))
                 result['active_sessions'] = cur2.fetchone()[0]
-
-                # Active sessions in 24h
-                cur2.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (day_ago,))
-                result['sessions_24h'] = cur2.fetchone()[0]
 
                 # Estimated cost 24h
                 cur2.execute("SELECT COALESCE(SUM(estimated_cost_usd), 0) FROM sessions WHERE started_at > ?", (day_ago,))
@@ -1845,20 +1845,24 @@ class Handler(BaseHTTPRequestHandler):
                         'id': active_key.get('id', ''),
                         'fingerprint': active_key.get('secret_fingerprint', '')[:12],
                         'status': active_key.get('last_status', 'unknown'),
+                        'request_count': active_key.get('request_count', 0),
+                        'calls_per_key_per_day': 200,
                     }
                 else:
-                    result['active_key'] = {'label': 'none', 'status': 'unknown'}
+                    result['active_key'] = {'label': 'none', 'status': 'unknown', 'request_count': 0, 'calls_per_key_per_day': 200}
 
                 # Total key count and quota
                 result['total_keys'] = len(pool)
                 result['calls_per_key_per_day'] = 200
                 result['total_quota'] = len(pool) * 200
 
-                # Calls today — count sessions started in last 24h
+                # Calls today — sum api_call_count from state.db sessions
+                # This is the real metric: actual LLM API calls made
                 conn = sqlite3.connect(STATE_DB)
                 cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (day_ago,))
+                cur.execute("SELECT COALESCE(SUM(api_call_count), 0) FROM sessions WHERE started_at > strftime('%s','now','-1 day')")
                 result['calls_today'] = cur.fetchone()[0]
+                conn.close()
 
                 # Per-key usage (from auth.json request_count)
                 key_usage = []
@@ -1870,7 +1874,6 @@ class Handler(BaseHTTPRequestHandler):
                         'request_count': k.get('request_count', 0),
                     })
                 result['keys'] = key_usage
-                conn.close()
 
                 result['quota_remaining'] = result['total_quota'] - result['calls_today']
                 result['quota_pct'] = min(100, round((result['calls_today'] / result['total_quota']) * 100, 1)) if result['total_quota'] > 0 else 0
