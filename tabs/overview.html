@@ -1073,6 +1073,10 @@
         <div class="stat-label">Cache Hits</div>
         <div class="stat-value" style="color:var(--brand-pink)" id="statCache">—</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">API Cost (24h)</div>
+        <div class="stat-value" style="color:var(--brand-mint)" id="statCost">—</div>
+      </div>
     </div>
 
     <!-- BOTTOM: Throughput + Activity -->
@@ -1099,15 +1103,15 @@
     <div class="footer-strip">
       <div class="footer-cell">
         <div class="cell-value" id="footerQueue">—</div>
-        <div class="cell-label">Queue</div>
+        <div class="cell-label">Active</div>
       </div>
       <div class="footer-cell">
         <div class="cell-value" id="footerSessions">—</div>
-        <div class="cell-label">Sessions</div>
+        <div class="cell-label">Sessions (24h)</div>
       </div>
       <div class="footer-cell">
         <div class="cell-value" id="footerErrors">—</div>
-        <div class="cell-label">Errors</div>
+        <div class="cell-label">Failed (24h)</div>
       </div>
       <div class="footer-cell">
         <div class="cell-value" id="footerToday">—</div>
@@ -1525,14 +1529,26 @@
     // Cache — 24h cached tokens
     const cache = (tokens24h.cache_read || 0) + (tokens24h.cache_write || 0);
     document.getElementById('statCache').textContent = cache.toLocaleString();
+    // API Cost — 24h estimated
+    document.getElementById('statCost').textContent = '$' + (cost24h || 0).toFixed(2);
 
-    // DB size
-    document.getElementById('dbSize').textContent = (totals.total || 0) + ' entries';
+    // DB size — actual file sizes from rate endpoint
+    const dbSizes = window._rateData24h?.db_sizes || {};
+    const fmtSize = (b) => { if (!b) return '—'; if (b > 1073741824) return (b/1073741824).toFixed(1)+' GB'; if (b > 1048576) return (b/1048576).toFixed(1)+' MB'; return (b/1024).toFixed(0)+' KB'; };
+    const totalDb = dbSizes.total || 0;
+    const parts = [];
+    if (dbSizes.state) parts.push(`state ${fmtSize(dbSizes.state)}`);
+    if (dbSizes.agent_logs) parts.push(`logs ${fmtSize(dbSizes.agent_logs)}`);
+    if (dbSizes.kanban) parts.push(`kanban ${fmtSize(dbSizes.kanban)}`);
+    document.getElementById('dbSize').textContent = parts.length ? parts.join(' · ') : (totals.total || 0) + ' entries';
 
     // Footer
-    const kanbanTasks = data.kanban?.total || 0;
-    document.getElementById('footerQueue').textContent = kanbanTasks;
-    document.getElementById('footerSessions').textContent = sessions.session_count || 0;
+    const activeTasks = window._rateData?.active_tasks ?? 0;
+    const sessions24h = window._rateData24h?.sessions_24h ?? (sessions.session_count || 0);
+    const cost24h = window._rateData24h?.cost_24h ?? 0;
+
+    document.getElementById('footerQueue').textContent = activeTasks;
+    document.getElementById('footerSessions').textContent = sessions24h.toLocaleString();
     document.getElementById('footerErrors').textContent = failed24h;
     document.getElementById('footerErrors').style.color = failed24h > 0 ? 'var(--brand-red)' : 'var(--brand-mint)';
     // Today
@@ -1666,7 +1682,13 @@
       container.innerHTML = '<div style="color:var(--text-muted);padding:var(--space-3)">No recent activity</div>';
       return;
     }
-    const sliced = recent.slice(0, 15);
+    // Filter out synthetic kanban-injected entries (model_used is null/empty)
+    const filtered = recent.filter(e => e.model_used || e.status === 'failed');
+    const sliced = filtered.slice(0, 15);
+    if (!sliced.length) {
+      container.innerHTML = '<div style="color:var(--text-muted);padding:var(--space-3)">No real activity</div>';
+      return;
+    }
     container.innerHTML = sliced.map(e => {
       const agent = e.agent_name || 'unknown';
       const color = AGENT_COLORS[agent] || 'var(--text-muted)';

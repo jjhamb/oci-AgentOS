@@ -1762,7 +1762,33 @@ class Handler(BaseHTTPRequestHandler):
                 # Active sessions in last 60s
                 cur2.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (min_ago,))
                 result['active_sessions'] = cur2.fetchone()[0]
+
+                # Active sessions in 24h
+                cur2.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (day_ago,))
+                result['sessions_24h'] = cur2.fetchone()[0]
+
+                # Estimated cost 24h
+                cur2.execute("SELECT COALESCE(SUM(estimated_cost_usd), 0) FROM sessions WHERE started_at > ?", (day_ago,))
+                result['cost_24h'] = round(cur2.fetchone()[0], 2)
+
                 conn2.close()
+
+                # DB file sizes
+                db_sizes = {}
+                try:
+                    db_sizes['state'] = os.path.getsize(STATE_DB)
+                except Exception:
+                    db_sizes['state'] = 0
+                try:
+                    db_sizes['agent_logs'] = os.path.getsize(AGENT_LOGS_DB)
+                except Exception:
+                    db_sizes['agent_logs'] = 0
+                try:
+                    db_sizes['kanban'] = os.path.getsize(KANBAN_DB)
+                except Exception:
+                    db_sizes['kanban'] = 0
+                db_sizes['total'] = db_sizes['state'] + db_sizes['agent_logs'] + db_sizes['kanban']
+                result['db_sizes'] = db_sizes
 
                 # Active running tasks from kanban
                 result['active_tasks'] = 0
