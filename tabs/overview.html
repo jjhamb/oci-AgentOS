@@ -361,7 +361,7 @@
 
   /* Activity feed */
   .activity-feed {
-    max-height: 240px;
+    max-height: 400px;
     overflow-y: auto;
   }
   .activity-entry {
@@ -490,12 +490,472 @@
   /* ── Radar Sweep ── */
   @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+  /* ═══════════════════════════════════════════
+     AGENTS TAB — Tile Diagram
+     ═══════════════════════════════════════════ */
+
+  /* ── Agents Header ── */
+  .agents-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+  .agents-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+  }
+  .agents-title {
+    font-family: var(--font-display);
+    font-size: clamp(36px, 4vw, 60px);
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.1;
+    margin-top: var(--space-1);
+  }
+  .agents-status-card {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    background: rgba(31,31,43,0.5);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+  }
+  .agents-status-cell {
+    text-align: center;
+    padding: 0 var(--space-2);
+  }
+  .agents-status-count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xl);
+    font-weight: 500;
+  }
+  .agents-status-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  /* ── Top row: log | orch | detail ── */
+  .agents-top {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: var(--space-4);
+    align-items: stretch;
+  }
+  .agents-log-panel {
+    padding: var(--space-3);
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+  }
+  .agents-log-panel .agents-log {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 280px;
+  }
+  .agents-orch-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 220px;
+  }
+  .agents-crew-label {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 600;
+    color: #FFFFFF;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-3);
+    text-align: center;
+    line-height: 1.1;
+  }
+  .agents-orch-col .agent-tile {
+    width: 240px;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .agents-orch-col .agent-tile .agent-tile-name {
+    font-size: 28px;
+  }
+  .agents-orch-col .agent-tile .agent-tile-role {
+    font-size: var(--font-size-sm);
+  }
+  .agents-orch-col .agent-tile .agent-tile-task {
+    font-size: var(--font-size-sm);
+    -webkit-line-clamp: 3;
+    min-height: 48px;
+  }
+  .agents-orch-col .agent-tile .agent-badge {
+    font-size: var(--font-size-sm);
+    padding: 4px 12px;
+  }
+  .agents-orch-col .agent-tile .agent-tile-status-dot {
+    width: 10px; height: 10px;
+  }
+  .agents-detail-panel {
+    padding: var(--space-3);
+    min-height: 120px;
+  }
+
+  /* ── Diagram Stage ── */
+  .agents-diagram {
+    position: relative;
+    width: 100%;
+    padding: var(--space-3) 0;
+  }
+  .agents-diagram svg.diagram-lines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Agent Tiles Row ── */
+  .agents-row {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+  .agents-row.workers-row {
+    margin-top: var(--space-6);
+    gap: var(--space-2);
+  }
+
+  /* ── Agent Tile ── */
+  .agent-tile {
+    position: relative;
+    width: 180px;
+    background: rgba(31,31,43,0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-top: 2px solid var(--tile-accent, var(--brand-violet));
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    transition: all var(--transition-normal);
+    cursor: default;
+    overflow: visible;
+  }
+  .agent-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  /* Status glow: active = colored pulse, idle = steady dim, dormant = grey flat */
+  .agent-tile.status-active {
+    border-color: var(--tile-accent, rgba(94,226,181,0.5));
+    box-shadow: 0 0 12px var(--tile-glow, rgba(94,226,181,0.25)), 0 0 40px var(--tile-glow, rgba(94,226,181,0.1)), inset 0 1px 0 rgba(255,255,255,0.05);
+    animation: glow-pulse-active 3s ease-in-out infinite;
+  }
+  /* Orchestrator: active = strong violet pulse */
+  .agents-orch-col .agent-tile.status-active {
+    border-color: var(--tile-accent, rgba(167,139,250,0.6));
+    animation: glow-pulse-orch 2.5s ease-in-out infinite;
+  }
+  /* Orchestrator: waiting = steady amber pulse (less intense) */
+  .agents-orch-col .agent-tile.status-waiting {
+    border-color: rgba(245,181,68,0.4);
+    box-shadow: 0 0 8px rgba(245,181,68,0.2), 0 0 20px rgba(245,181,68,0.08), inset 0 1px 0 rgba(255,255,255,0.05);
+    animation: glow-pulse-waiting 4s ease-in-out infinite;
+  }
+  @keyframes glow-pulse-waiting {
+    0%, 100% { box-shadow: 0 0 6px rgba(245,181,68,0.15), 0 0 16px rgba(245,181,68,0.06), inset 0 1px 0 rgba(255,255,255,0.05); }
+    50%      { box-shadow: 0 0 14px rgba(245,181,68,0.3), 0 0 32px rgba(245,181,68,0.12), inset 0 1px 0 rgba(255,255,255,0.05); }
+  }
+  @keyframes glow-pulse-orch {
+    0%, 100% { box-shadow: 0 0 12px var(--tile-glow, rgba(167,139,250,0.35)), 0 0 36px var(--tile-glow, rgba(167,139,250,0.12)), inset 0 1px 0 rgba(255,255,255,0.05); }
+    50%      { box-shadow: 0 0 28px var(--tile-glow, rgba(167,139,250,0.6)), 0 0 64px var(--tile-glow, rgba(167,139,250,0.25)), inset 0 1px 0 rgba(255,255,255,0.05); }
+  }
+  .agent-tile.status-idle {
+    border-color: rgba(255,255,255,0.12);
+    box-shadow: 0 0 6px var(--tile-glow, rgba(245,181,68,0.15)), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .agent-tile.status-dormant {
+    border-color: rgba(255,255,255,0.06);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    opacity: 0.6;
+  }
+
+  @keyframes glow-pulse-active {
+    0%, 100% { box-shadow: 0 0 8px var(--tile-glow, rgba(94,226,181,0.3)), 0 0 24px var(--tile-glow, rgba(94,226,181,0.1)), inset 0 1px 0 rgba(255,255,255,0.05); }
+    50%      { box-shadow: 0 0 20px var(--tile-glow, rgba(94,226,181,0.55)), 0 0 50px var(--tile-glow, rgba(94,226,181,0.2)), inset 0 1px 0 rgba(255,255,255,0.05); }
+  }
+
+  /* Tile inner */
+  .agent-tile-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+  }
+  .agent-badge {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+  }
+  .agent-tile-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+  .agent-tile-status-dot.active { background: var(--brand-mint); animation: pulse-dot 2s ease-in-out infinite; }
+  .agent-tile-status-dot.waiting { background: var(--brand-amber); animation: pulse-dot 3s ease-in-out infinite; }
+  .agent-tile-status-dot.idle { background: var(--brand-amber); opacity: 0.5; }
+  .agent-tile-status-dot.dormant { background: #555; opacity: 0.5; }
+
+  .agent-tile-name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .agent-tile-role {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+  }
+  .agent-tile-task {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 28px;
+  }
+  .agent-tile-model {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    margin-top: var(--space-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Hover Detail Bubble ── */
+  .agent-tile-bubble {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.95);
+    width: 240px;
+    background: rgba(21,21,31,0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease, transform 150ms ease;
+    z-index: 50;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  }
+  .agent-tile:hover .agent-tile-bubble {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  .agent-tile-bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(21,21,31,0.9);
+  }
+  .bubble-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .bubble-task {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .bubble-meta {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* ── Worker tiles (smaller) ── */
+  .agent-tile.worker-tile {
+    width: 150px;
+    padding: var(--space-2) var(--space-3);
+  }
+  .agent-tile.worker-tile .agent-tile-name { font-size: 14px; }
+  .agent-tile.worker-tile .agent-tile-role { font-size: 10px; }
+  .agent-tile.worker-tile .agent-tile-task { font-size: 10px; min-height: 22px; }
+
+  /* ── SVG Diagram Lines ── */
+  .diagram-line {
+    stroke: rgba(255,255,255,0.08);
+    stroke-width: 1.5;
+    fill: none;
+  }
+  .diagram-line.comm-line {
+    stroke: var(--comm-color, rgba(94,226,181,0.3));
+    stroke-width: 2;
+    animation: comm-pulse 2s ease-in-out infinite;
+  }
+  @keyframes comm-pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+  }
+
   /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .agents-top { grid-template-columns: 1fr 1fr; }
+    .agents-orch-col { grid-column: 1 / -1; order: -1; }
+    .agents-row { flex-wrap: wrap; gap: var(--space-2); }
+    .agent-tile { width: 160px; }
+    .agent-tile.worker-tile { width: 130px; }
+  }
   @media (max-width: 768px) {
     .nav { flex-wrap: wrap; gap: var(--space-2); }
     .tab-row { order: 3; width: 100%; overflow-x: auto; }
     .brand-name { font-size: var(--font-size-base); }
     .status-pill span.label-text { display: none; }
+    .agents-top { grid-template-columns: 1fr; }
+    .agents-orch-col { grid-column: auto; }
+    .agents-row { justify-content: flex-start; overflow-x: auto; padding-bottom: var(--space-2); }
+    .agent-tile { min-width: 150px; width: 150px; }
+    .agent-tile.worker-tile { min-width: 120px; width: 120px; }
+  }
+  .agents-log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-left: 3px solid var(--entry-color, transparent);
+    padding-left: var(--space-2);
+    transition: background 0.3s ease;
+  }
+  .agents-log-entry.flash {
+    animation: log-flash 1.5s ease-out;
+  }
+  @keyframes log-flash {
+    0%   { background: var(--entry-color, rgba(255,255,255,0.1)); }
+    100% { background: transparent; }
+  }
+  .agents-log-time {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+    width: 44px;
+  }
+  .agents-log-agent {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    width: 80px;
+  }
+  .agents-log-desc {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  /* ── Right detail panel ── */
+  .agents-detail-panel {
+    background: rgba(31,31,43,0.5);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    min-height: 120px;
+    transition: box-shadow 0.5s ease, border-color 0.5s ease;
+  }
+  .agents-detail-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .agents-detail-name {
+    font-family: var(--font-display);
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+  }
+  .agents-detail-role {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+  }
+  .agents-detail-section {
+    margin-bottom: var(--space-3);
+  }
+  .agents-detail-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .agents-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .agents-detail-empty {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    padding: var(--space-5) 0;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .agents-top { grid-template-columns: 1fr 1fr; }
+    .agents-orch-col { grid-column: 1 / -1; order: -1; }
+    .agents-row { flex-wrap: wrap; gap: var(--space-2); }
+    .agent-tile { width: 160px; }
+    .agent-tile.worker-tile { width: 130px; }
+  }
+  @media (max-width: 768px) {
+    .nav { flex-wrap: wrap; gap: var(--space-2); }
+    .tab-row { order: 3; width: 100%; overflow-x: auto; }
+    .brand-name { font-size: var(--font-size-base); }
+    .status-pill span.label-text { display: none; }
+    .agents-row { justify-content: flex-start; overflow-x: auto; padding-bottom: var(--space-2); }
+    .agent-tile { min-width: 150px; width: 150px; }
+    .agent-tile.worker-tile { min-width: 120px; width: 120px; }
   }
 </style>
 </head>
@@ -621,6 +1081,13 @@
         <div class="overview-label">Throughput</div>
         <div class="throughput-value" id="throughputValue">—</div>
         <div class="sparkline-wrap"><canvas id="sparklineCanvas" width="600" height="60"></canvas></div>
+        <div class="sparkline-legend" id="sparklineLegend" style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:var(--text-muted);flex-wrap:wrap">
+          <span style="color:#7dd3fc">● API calls</span>
+          <span style="color:#a78bfa">● Messages</span>
+          <span style="color:#34d399">● Tokens/min</span>
+          <span style="color:#fbbf24">● Tasks</span>
+          <span style="color:#f87171">● Failures</span>
+        </div>
       </div>
       <div class="glass-card">
         <div class="overview-label">Activity</div>
@@ -653,13 +1120,35 @@
     </div>
   </div>
   <div class="tab-panel" id="panel-agents">
-    <div class="glass-card"><div class="empty-state"><div class="icon">🤖</div><div>Agents — 11-card grid + activity</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 24–25 build this panel</div></div></div>
+    <!-- TOP ROW: Activity log | Orchestrator (with label) | Detail panel -->
+    <div class="agents-top">
+      <div class="glass-card agents-log-panel">
+        <div class="overview-label">Live Activity</div>
+        <div class="agents-log" id="agentsLog"></div>
+      </div>
+      <div class="agents-orch-col">
+        <div class="agents-crew-label">The Crew.</div>
+        <div class="agents-row" id="rowOrchestrator"></div>
+      </div>
+      <div class="glass-card agents-detail-panel" id="agentsDetail">
+        <div class="agents-detail-empty">Hover or click an agent tile</div>
+      </div>
+    </div>
+
+    <!-- DIAGRAM: 5 agents + 5 workers -->
+    <div class="glass-card" style="margin-top:var(--space-4);padding:var(--space-4);overflow:visible">
+      <div class="agents-diagram" id="agentsDiagram">
+        <svg class="diagram-lines" id="diagramSvg"></svg>
+        <div class="agents-row" id="rowAgents"></div>
+        <div class="agents-row workers-row" id="rowWorkers"></div>
+      </div>
+    </div>
   </div>
   <div class="tab-panel" id="panel-tasks">
     <div class="glass-card"><div class="empty-state"><div class="icon">✅</div><div>Tasks — live kanban board</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 26 builds this panel</div></div></div>
   </div>
   <div class="tab-panel" id="panel-schedule">
-    <div class="glass-card"><div class="empty-state"><div class="icon">⏰</div><div>Schedule — cron jobs + timeline</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompt 27 builds this panel</div></div></div>
+    <div class="glass-card"><div class="empty-state"><div class="icon">⏰</div><div>Schedule — cron jobs + timeline</div></div></div>
   </div>
   <div class="tab-panel" id="panel-content">
     <div class="glass-card"><div class="empty-state"><div class="icon">📁</div><div>Content — documents + storage</div><div style="font-size:var(--font-size-xs);opacity:0.6">Prompts 28–29 build this panel</div></div></div>
@@ -672,14 +1161,27 @@
   const GlassCard = (children, cls) => '<div class="glass-card ' + (cls||'') + '">' + children + '</div>';
 
   /* ── Tab Switching ── */
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (btn) btn.classList.add('active');
+    const panel = document.getElementById('panel-' + tabName);
+    if (panel) panel.classList.add('active');
+    localStorage.setItem('hermes_active_tab', tabName);
+  }
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      switchTab(btn.dataset.tab);
     });
   });
+
+  // Restore last active tab on page load
+  const savedTab = localStorage.getItem('hermes_active_tab');
+  if (savedTab && document.getElementById('panel-' + savedTab)) {
+    switchTab(savedTab);
+  }
 
   // ── Live Clock ──
   function updateClock() {
@@ -705,9 +1207,10 @@
     reviewer: '#6EE7B7',
   };
 
-  const SPARKLINE_HISTORY = [];
+  const SPARKLINE_HISTORY = { calls: [], messages: [], tokens: [], tasks: [], failures: [] };
   const SPARKLINE_MAX = 30;
   let lastActivityCount = 0;
+  let ratePollTimer = null;
   let directiveIdx = 0;
   let directiveEntries = [];
 
@@ -782,37 +1285,28 @@
       activeAgentName = activityRecent[0].agent_name;
     }
 
-    // Orchestrator center dot (larger, pulsating only when active work)
+    // Orchestrator center dot (larger, pulsing)
     const orch = agentMap['orchestrator'];
-    const orchStatus = orch?.status || 'idle';
     const orchDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     orchDot.setAttribute('cx', cx);
     orchDot.setAttribute('cy', cy);
     orchDot.setAttribute('r', 8);
     orchDot.setAttribute('fill', AGENT_COLORS['orchestrator']);
     orchDot.setAttribute('class', 'radar-dot');
+    orchDot.setAttribute('opacity', '0.9');
     orchDot.style.cursor = 'pointer';
-    if (orchStatus === 'pulsating') {
-      orchDot.setAttribute('opacity', '1');
-      orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="1.5s" repeatCount="indefinite"/>`;
-    } else if (orchStatus === 'active') {
-      orchDot.setAttribute('opacity', '0.9');
-    } else {
-      orchDot.setAttribute('opacity', '0.4');
-    }
+    orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="3s" repeatCount="indefinite"/>`;
     svg.appendChild(orchDot);
     addTooltip(orchDot, orch);
 
-    // Flash active agent with expanding ring — only when a pulsating agent exists
-    const pulsatingAgent = agents.find(a => a.status === 'pulsating');
-    if (pulsatingAgent) {
-      const paColor = AGENT_COLORS[pulsatingAgent.name] || '#fff';
+    // Flash active agent with expanding ring
+    if (activeAgentName && agentMap[activeAgentName]) {
       const activeDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       activeDot.setAttribute('cx', cx);
       activeDot.setAttribute('cy', cy);
       activeDot.setAttribute('r', 14);
       activeDot.setAttribute('fill', 'none');
-      activeDot.setAttribute('stroke', paColor);
+      activeDot.setAttribute('stroke', AGENT_COLORS[activeAgentName] || '#fff');
       activeDot.setAttribute('stroke-width', '1');
       activeDot.setAttribute('opacity', '0.6');
       activeDot.innerHTML = `<animate attributeName="r" values="10;18;10" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite"/>`;
@@ -855,23 +1349,16 @@
       line.setAttribute('class', 'radar-line');
       svg.appendChild(line);
 
-      // Dot — animate only when pulsating
-      const dotStatus = a?.status || 'idle';
+      // Dot
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       dot.setAttribute('cx', x);
       dot.setAttribute('cy', y);
       dot.setAttribute('r', 5 + share * 2);
       dot.setAttribute('fill', AGENT_COLORS[name] || '#fff');
       dot.setAttribute('class', 'radar-dot');
+      dot.setAttribute('opacity', '0.85');
       dot.style.cursor = 'pointer';
-      if (dotStatus === 'pulsating') {
-        dot.setAttribute('opacity', '1');
-        dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>`;
-      } else if (dotStatus === 'active') {
-        dot.setAttribute('opacity', '0.85');
-      } else {
-        dot.setAttribute('opacity', '0.35');
-      }
+      dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="${2 + i * 0.3}s" repeatCount="indefinite"/>`;
       svg.appendChild(dot);
       addTooltip(dot, a);
 
@@ -924,23 +1411,16 @@
           wLine.setAttribute('class', 'radar-line');
           svg.appendChild(wLine);
 
-          // Worker dot — animate only when pulsating
-          const wStatus = wa?.status || 'idle';
+          // Worker dot
           const wDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           wDot.setAttribute('cx', wx);
           wDot.setAttribute('cy', wy);
           wDot.setAttribute('r', 3 + wShare * 2);
           wDot.setAttribute('fill', AGENT_COLORS[wName] || '#fff');
           wDot.setAttribute('class', 'radar-dot');
+          wDot.setAttribute('opacity', '0.7');
           wDot.style.cursor = 'pointer';
-          if (wStatus === 'pulsating') {
-            wDot.setAttribute('opacity', '1');
-            wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.5s" repeatCount="indefinite"/>`;
-          } else if (wStatus === 'active') {
-            wDot.setAttribute('opacity', '0.7');
-          } else {
-            wDot.setAttribute('opacity', '0.3');
-          }
+          wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="${2.5 + wi * 0.2}s" repeatCount="indefinite"/>`;
           svg.appendChild(wDot);
           addTooltip(wDot, wa);
 
@@ -1021,37 +1501,40 @@
     const tokens = sessions.tokens || {};
     const gateway = data.gateway || {};
 
-    // Integrity
-    const total = totals.total || 0;
-    const completed = totals.completed || 0;
-    const integrity = total > 0 ? ((completed / total) * 100).toFixed(1) : '100.0';
-    document.getElementById('statIntegrity').textContent = integrity + '%';
-    document.getElementById('statIntegritySub').textContent = `${total} of ${total} responsive`;
+    // --- Corrected stat tiles using 24h data from rate endpoint ---
+    // Falls back to snapshot data if rate data not yet loaded
+    const rate24h = window._rateData24h || {};
+    const calls24h = rate24h.calls_24h ?? totals.total ?? 0;
+    const completed24h = rate24h.completed_24h ?? totals.completed ?? 0;
+    const failed24h = rate24h.failed_24h ?? totals.failed ?? 0;
+    const messages24h = rate24h.messages_24h ?? (sessions.message_count || 0);
+    const tokens24h = rate24h.tokens_24h || tokens;
 
-    // Agent Calls
-    document.getElementById('statCalls').textContent = total || 0;
-    // Messages
-    document.getElementById('statMessages').textContent = sessions.message_count || 0;
-    // Tokens In
-    document.getElementById('statTokens').textContent = (tokens.input || 0).toLocaleString();
-    // Cache Hits
-    const cache = (tokens.cache_read || 0) + (tokens.cache_write || 0);
+    // Integrity — real success rate (24h completed / total, excluding synthetics)
+    const integrityTotal = calls24h;
+    const integrity = integrityTotal > 0 ? ((completed24h / integrityTotal) * 100).toFixed(1) : '100.0';
+    document.getElementById('statIntegrity').textContent = integrity + '%';
+    document.getElementById('statIntegritySub').textContent = `${completed24h} of ${integrityTotal} successful`;
+
+    // Agent Calls — 24h count (not cumulative forever)
+    document.getElementById('statCalls').textContent = calls24h.toLocaleString();
+    // Messages — 24h count
+    document.getElementById('statMessages').textContent = messages24h.toLocaleString();
+    // Tokens In — 24h input tokens
+    document.getElementById('statTokens').textContent = (tokens24h.input || 0).toLocaleString();
+    // Cache — 24h cached tokens
+    const cache = (tokens24h.cache_read || 0) + (tokens24h.cache_write || 0);
     document.getElementById('statCache').textContent = cache.toLocaleString();
 
     // DB size
-    let dbSize = 0;
-    [data.activity, data.sessions, data.kanban].forEach(d => {
-      if (d && d.db_bytes) dbSize += d.db_bytes;
-    });
-    // Estimate from file sizes via API doesn't include file sizes; use session count as proxy
     document.getElementById('dbSize').textContent = (totals.total || 0) + ' entries';
 
     // Footer
     const kanbanTasks = data.kanban?.total || 0;
     document.getElementById('footerQueue').textContent = kanbanTasks;
     document.getElementById('footerSessions').textContent = sessions.session_count || 0;
-    document.getElementById('footerErrors').textContent = totals.failed || 0;
-    document.getElementById('footerErrors').style.color = (totals.failed || 0) > 0 ? 'var(--brand-red)' : 'var(--brand-mint)';
+    document.getElementById('footerErrors').textContent = failed24h;
+    document.getElementById('footerErrors').style.color = failed24h > 0 ? 'var(--brand-red)' : 'var(--brand-mint)';
     // Today
     const today = new Date().toISOString().slice(0, 10);
     const todayCount = data.activity?.daily?.find(d => d.day === today)?.count || 0;
@@ -1071,17 +1554,45 @@
     }
     document.getElementById('footerUptime').innerHTML = uptimeStr;
 
-    // Throughput
-    const totalOutput = totals.total || 0;
-    document.getElementById('throughputValue').textContent = totalOutput + ' responses';
-
-    // Sparkline
-    SPARKLINE_HISTORY.push(totalOutput);
-    if (SPARKLINE_HISTORY.length > SPARKLINE_MAX) SPARKLINE_HISTORY.shift();
-    drawSparkline();
+    // Throughput label — show current rate (calls/min)
+    const rateData = window._rateData || {};
+    const callsPerMin = rateData.calls_per_min ?? 0;
+    document.getElementById('throughputValue').textContent = callsPerMin + ' calls/min';
   }
 
-  // Draw sparkline
+  // Fetch per-minute rate data for sparkline + corrected tiles
+  function fetchRateData() {
+    if (isStandalone) return;
+    fetch('/api/activity/rate')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => {
+        window._rateData = data;
+        window._rateData24h = data;
+        // Push into sparkline history
+        SPARKLINE_HISTORY.calls.push(data.calls_per_min || 0);
+        SPARKLINE_HISTORY.messages.push(data.messages_per_min || 0);
+        SPARKLINE_HISTORY.tokens.push(data.tokens_per_min || 0);
+        SPARKLINE_HISTORY.tasks.push(data.active_tasks || 0);
+        SPARKLINE_HISTORY.failures.push(data.failures_per_min || 0);
+        // Trim to max
+        Object.keys(SPARKLINE_HISTORY).forEach(k => {
+          if (SPARKLINE_HISTORY[k].length > SPARKLINE_MAX) SPARKLINE_HISTORY[k].shift();
+        });
+        drawSparkline();
+        renderStats(window._lastSnapshot || {});
+      })
+      .catch(() => {/* silent*/});
+  }
+
+  // Multi-series sparkline
+  const SPARKLINE_SERIES = [
+    { key: 'calls',    color: '#7dd3fc', label: 'API calls',   alpha: 0.15 },
+    { key: 'messages', color: '#a78bfa', label: 'Messages',    alpha: 0.10 },
+    { key: 'tokens',   color: '#34d399', label: 'Tokens/min',  alpha: 0.08 },
+    { key: 'tasks',    color: '#fbbf24', label: 'Active tasks', alpha: 0.10 },
+    { key: 'failures', color: '#f87171', label: 'Failures',     alpha: 0.20 },
+  ];
+
   function drawSparkline() {
     const canvas = document.getElementById('sparklineCanvas');
     if (!canvas) return;
@@ -1089,50 +1600,63 @@
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    const data = SPARKLINE_HISTORY;
-    if (data.length < 2) return;
-    const max = Math.max(...data, 1);
+
+    // Determine global max across all series for uniform scaling
+    let globalMax = 0;
+    SPARKLINE_SERIES.forEach(s => {
+      const arr = SPARKLINE_HISTORY[s.key];
+      if (arr && arr.length) {
+        const m = Math.max(...arr);
+        if (m > globalMax) globalMax = m;
+      }
+    });
+    if (globalMax < 1) globalMax = 1;
     const step = w / (SPARKLINE_MAX - 1);
 
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, 'rgba(139,92,246,0.3)');
-    grad.addColorStop(1, 'rgba(125,211,252,0.0)');
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    data.forEach((v, i) => {
-      const x = i * step;
-      const y = h - (v / max) * (h - 8) - 4;
-      if (i === 0) ctx.lineTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.lineTo((data.length - 1) * step, h);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    // Draw each series
+    SPARKLINE_SERIES.forEach(s => {
+      const data = SPARKLINE_HISTORY[s.key];
+      if (!data || data.length < 2) return;
 
-    // Line
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = i * step;
-      const y = h - (v / max) * (h - 8) - 4;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = '#8B5CF6';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+      // Gradient fill
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, s.color + Math.round(s.alpha * 255).toString(16).padStart(2, '0'));
+      grad.addColorStop(1, s.color + '00');
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      data.forEach((v, i) => {
+        const x = i * step;
+        const y = h - (v / globalMax) * (h - 8) - 4;
+        ctx.lineTo(x, y);
+      });
+      ctx.lineTo((data.length - 1) * step, h);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
 
-    // Glow dot at end
-    const lastX = (data.length - 1) * step;
-    const lastY = h - (data[data.length - 1] / max) * (h - 8) - 4;
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#7DD3FC';
-    ctx.shadowColor = '#7DD3FC';
-    ctx.shadowBlur = 8;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+      // Line
+      ctx.beginPath();
+      data.forEach((v, i) => {
+        const x = i * step;
+        const y = h - (v / globalMax) * (h - 8) - 4;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // Glow dot at end
+      const lastX = (data.length - 1) * step;
+      const lastY = h - (data[data.length - 1] / globalMax) * (h - 8) - 4;
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
   }
 
   // Render activity feed
@@ -1142,7 +1666,7 @@
       container.innerHTML = '<div style="color:var(--text-muted);padding:var(--space-3)">No recent activity</div>';
       return;
     }
-    const sliced = recent.slice(0, 8);
+    const sliced = recent.slice(0, 15);
     container.innerHTML = sliced.map(e => {
       const agent = e.agent_name || 'unknown';
       const color = AGENT_COLORS[agent] || 'var(--text-muted)';
@@ -1214,7 +1738,7 @@
     }
     fetch('/api/snapshot')
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(data => { renderOverview(data); })
+      .then(data => { window._lastSnapshot = data; renderOverview(data); })
       .catch(() => {/* silent*/});
   }
 
@@ -1228,21 +1752,27 @@
     if (typeof EventSource === 'undefined') {
       overviewPollTimer = setInterval(fetchOverview, 8000);
       fetchOverview();
+      // Also poll rate data every 8s
+      ratePollTimer = setInterval(fetchRateData, 8000);
+      fetchRateData();
       return;
     }
     const es = new EventSource('/events');
     es.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
+        window._lastSnapshot = data;
         renderOverview(data);
       } catch (e) {}
     };
     es.onerror = () => {
       // Fallback to polling
       if (!overviewPollTimer) overviewPollTimer = setInterval(fetchOverview, 8000);
+      if (!ratePollTimer) ratePollTimer = setInterval(fetchRateData, 8000);
     };
     // Initial fetch
     fetchOverview();
+    fetchRateData();
     // Cycle directive every 3s
     setInterval(() => { if (directiveEntries.length) renderDirective(directiveEntries); }, 3000);
   }
@@ -1262,6 +1792,308 @@
     window._overviewStarted = true;
     setupOverviewSSE();
   }
+
+  // ═══════════════════════════════════════════
+  // AGENTS TAB
+  // ═══════════════════════════════════════════
+  const AGENTS_ORDER = ['analyst', 'writer', 'infra', 'marketer', 'coder'];
+  const WORKERS_ORDER = ['executor', 'sentinel', 'web', 'publisher', 'reviewer'];
+  let agentsTabData = null;
+  let agentsLogEntries = [];
+  let selectedAgentName = null;
+  // Track previous statuses to detect task completion (active → non-active)
+  let prevAgentStatuses = {};
+  let completionResetTimers = {};
+
+  // Build a single agent tile HTML (no hover bubble — detail panel shows info)
+  function buildAgentTile(agent, isWorker) {
+    const color = AGENT_COLORS[agent.name] || '#888';
+    const status = agent.status || 'dormant';
+    const lastTask = agent.last_task || '—';
+    const model = (agent.model || '').split('/').pop().slice(0, 20);
+    const responses = agent.total_logs || 0;
+    const completed = agent.completed || 0;
+    const tileW = isWorker ? 'worker-tile' : '';
+    return `<div class="agent-tile ${tileW} status-${status}"
+                 data-agent="${agent.name}"
+                 style="--tile-accent:${color};--tile-glow:${color}">
+      <div class="agent-tile-top">
+        <span class="agent-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${agent.name.slice(0,4).toUpperCase()}</span>
+        <div class="agent-tile-status-dot ${status}"></div>
+      </div>
+      <div class="agent-tile-name">${agent.name.charAt(0).toUpperCase()+agent.name.slice(1)}</div>
+      <div class="agent-tile-role">${agent.role}</div>
+      <div class="agent-tile-task">${lastTask}</div>
+      ${model ? `<div class="agent-tile-model">${model}</div>` : ''}
+    </div>`;
+  }
+
+  // Draw curved SVG lines between parent and child tiles
+  function drawDiagramLines() {
+    const svg = document.getElementById('diagramSvg');
+    const diagram = document.getElementById('agentsDiagram');
+    if (!svg || !diagram) return;
+
+    const dRect = diagram.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${dRect.width} ${dRect.height}`);
+    svg.style.width = dRect.width + 'px';
+    svg.style.height = dRect.height + 'px';
+    svg.innerHTML = '';
+
+    // Orchestrator is now in the top row, agents/workers in the diagram below
+    // We need to draw lines from orch (outside diagram) to agents (inside diagram)
+    const orchTile = document.querySelector('#rowOrchestrator .agent-tile');
+    const agentsRow = document.getElementById('rowAgents');
+    if (!orchTile || !agentsRow) return;
+
+    const orchRect = orchTile.getBoundingClientRect();
+
+    // Line: Orchestrator → each of 5 agents
+    AGENTS_ORDER.forEach(name => {
+      const tile = document.querySelector(`#rowAgents .agent-tile[data-agent="${name}"]`);
+      if (!tile) return;
+      const tRect = tile.getBoundingClientRect();
+      const ox = orchRect.left + orchRect.width / 2 - dRect.left;
+      const oy = orchRect.bottom - dRect.top;
+      const tx = tRect.left + tRect.width / 2 - dRect.left;
+      const ty = tRect.top - dRect.top;
+      const color = AGENT_COLORS[name] || '#888';
+      const isActive = agentsTabData?.agents?.find(a => a.name === name)?.status === 'active';
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const midY = oy + (ty - oy) * 0.4;
+      path.setAttribute('d', `M${ox},${oy} C${ox},${midY} ${tx},${midY} ${tx},${ty}`);
+      path.setAttribute('class', isActive ? 'diagram-line comm-line' : 'diagram-line');
+      path.style.setProperty('--comm-color', color + '44');
+      svg.appendChild(path);
+    });
+
+    // Line: Infra → each of 5 workers
+    const infraTile = document.querySelector(`#rowAgents .agent-tile[data-agent="infra"]`);
+    if (infraTile) {
+      const infraRect = infraTile.getBoundingClientRect();
+      const ix = infraRect.left + infraRect.width / 2 - dRect.left;
+      const iy = infraRect.bottom - dRect.top;
+
+      WORKERS_ORDER.forEach(name => {
+        const tile = document.querySelector(`#rowWorkers .agent-tile[data-agent="${name}"]`);
+        if (!tile) return;
+        const tRect = tile.getBoundingClientRect();
+        const tx = tRect.left + tRect.width / 2 - dRect.left;
+        const ty = tRect.top - dRect.top;
+        const color = AGENT_COLORS[name] || '#888';
+        const isActive = agentsTabData?.agents?.find(a => a.name === name)?.status === 'active';
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const midY = iy + (ty - iy) * 0.4;
+        path.setAttribute('d', `M${ix},${iy} C${ix},${midY} ${tx},${midY} ${tx},${ty}`);
+        path.setAttribute('class', isActive ? 'diagram-line comm-line' : 'diagram-line');
+        path.style.setProperty('--comm-color', color + '44');
+        svg.appendChild(path);
+      });
+    }
+
+    // Communication lines: agents working on same task within 5 min window
+    if (agentsTabData?.activity?.recent) {
+      const recent = agentsTabData.activity.recent;
+      const now = Date.now();
+      const FIVE_MIN = 5 * 60 * 1000;
+      const taskGroups = {};
+      recent.forEach(e => {
+        if (!e.task_description || !e.created_at) return;
+        const age = now - new Date(e.created_at).getTime();
+        if (age > FIVE_MIN) return;
+        const key = e.task_description.slice(0, 60);
+        if (!taskGroups[key]) taskGroups[key] = [];
+        if (!taskGroups[key].find(a => a === e.agent_name)) taskGroups[key].push(e.agent_name);
+      });
+      Object.values(taskGroups).forEach(agents => {
+        if (agents.length < 2) return;
+        for (let i = 0; i < agents.length; i++) {
+          for (let j = i + 1; j < agents.length; j++) {
+            const a1 = agents[i], a2 = agents[j];
+            if (!AGENTS_ORDER.includes(a1) || !AGENTS_ORDER.includes(a2)) continue;
+            const t1 = document.querySelector(`#rowAgents .agent-tile[data-agent="${a1}"]`);
+            const t2 = document.querySelector(`#rowAgents .agent-tile[data-agent="${a2}"]`);
+            if (!t1 || !t2) continue;
+            const r1 = t1.getBoundingClientRect(), r2 = t2.getBoundingClientRect();
+            const x1 = r1.left + r1.width / 2 - dRect.left, y1 = r1.top + r1.height / 2 - dRect.top;
+            const x2 = r2.left + r2.width / 2 - dRect.left, y2 = r2.top + r2.height / 2 - dRect.top;
+            const mx = (x1 + x2) / 2, my = Math.min(y1, y2) - 15;
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M${x1},${y1} Q${mx},${my} ${x2},${y2}`);
+            path.setAttribute('class', 'diagram-line comm-line');
+            path.style.setProperty('--comm-color', 'rgba(139,92,246,0.35)');
+            svg.appendChild(path);
+          }
+        }
+      });
+    }
+  }
+
+  // Render the agents tab
+  function renderAgentsTab(data) {
+    if (!data?.agents?.agents) return;
+    agentsTabData = data;
+    const agentMap = {};
+    data.agents.agents.forEach(a => { agentMap[a.name] = a; });
+
+    // Detect task completions: agent was active, now not active
+    data.agents.agents.forEach(a => {
+      const prev = prevAgentStatuses[a.name];
+      if (prev === 'active' && a.status !== 'active') {
+        // Agent just completed a task — schedule visual reset to idle after 2s
+        if (!completionResetTimers[a.name]) {
+          completionResetTimers[a.name] = setTimeout(() => {
+            const tile = document.querySelector(`.agent-tile[data-agent="${a.name}"]`);
+            if (tile) {
+              tile.classList.remove('status-active');
+              tile.classList.add('status-idle');
+            }
+            delete completionResetTimers[a.name];
+          }, 2000);
+        }
+      }
+      prevAgentStatuses[a.name] = a.status;
+    });
+
+    // Orchestrator tile (no hover bubble — detail panel shows info)
+    const orch = agentMap['orchestrator'] || { name: 'orchestrator', role: 'Controller', status: 'dormant', last_task: '', model: '', total_logs: 0, completed: 0 };
+    const orchHtml = buildAgentTile(orch, false).replace('agent-tile-bubble', 'agent-tile-bubble" style="display:none');
+    document.getElementById('rowOrchestrator').innerHTML = orchHtml;
+
+    // 5 agents row
+    const agentsHtml = AGENTS_ORDER.map(name => {
+      const a = agentMap[name] || { name, role: name, status: 'dormant', last_task: '', model: '', total_logs: 0, completed: 0 };
+      return buildAgentTile(a, false);
+    }).join('');
+    document.getElementById('rowAgents').innerHTML = agentsHtml;
+
+    // 5 workers row
+    const workersHtml = WORKERS_ORDER.map(name => {
+      const a = agentMap[name] || { name, role: name, status: 'dormant', last_task: '', model: '', total_logs: 0, completed: 0 };
+      return buildAgentTile(a, true);
+    }).join('');
+    document.getElementById('rowWorkers').innerHTML = workersHtml;
+
+    // Draw SVG lines after DOM update
+    requestAnimationFrame(() => {
+      drawDiagramLines();
+    });
+
+    // Tile hover → detail panel
+    document.querySelectorAll('#panel-agents .agent-tile').forEach(tile => {
+      tile.addEventListener('mouseenter', () => {
+        const name = tile.dataset.agent;
+        const agent = agentMap[name];
+        if (agent) showAgentDetail(agent);
+      });
+      tile.addEventListener('click', () => {
+        const name = tile.dataset.agent;
+        selectedAgentName = selectedAgentName === name ? null : name;
+        const agent = agentMap[name];
+        if (agent) showAgentDetail(agent);
+      });
+    });
+
+    // Build activity log from recent entries
+    if (data.activity?.recent) {
+      const log = document.getElementById('agentsLog');
+      const recent = data.activity.recent.slice(0, 50);
+      const activeNames = new Set(data.agents.agents.filter(a => a.status !== 'dormant').map(a => a.name));
+      const filtered = recent.filter(e => activeNames.has(e.agent_name));
+      const newEntries = filtered.filter(e => !agentsLogEntries.find(le => le.created_at === e.created_at && le.agent_name === e.agent_name));
+      agentsLogEntries = filtered;
+      log.innerHTML = filtered.map(e => {
+        const color = AGENT_COLORS[e.agent_name] || '#888';
+        const time = e.created_at ? e.created_at.slice(11, 16) : '';
+        const isNew = newEntries.includes(e);
+        return `<div class="agents-log-entry ${isNew ? 'flash' : ''}" style="--entry-color:${color}">
+          <span class="agents-log-time">${time}</span>
+          <span class="agents-log-agent" style="color:${color}">${e.agent_name}</span>
+          <span class="agents-log-desc">${e.task_description || '—'}</span>
+        </div>`;
+      }).join('') || '<div style="color:var(--text-muted);padding:var(--space-3);font-size:var(--font-size-sm)">No active agent activity</div>';
+    }
+
+    // Auto-select most recently active agent for detail panel
+    if (!selectedAgentName && data.activity?.recent?.length) {
+      const latest = data.activity.recent[0];
+      const agent = agentMap[latest.agent_name];
+      if (agent) showAgentDetail(agent);
+    }
+  }
+
+  function showAgentDetail(agent) {
+    const color = AGENT_COLORS[agent.name] || '#888';
+    const panel = document.getElementById('agentsDetail');
+    const status = agent.status || 'dormant';
+    const statusColor = status === 'active' ? 'var(--brand-mint)' : status === 'waiting' ? 'var(--brand-amber)' : status === 'idle' ? 'var(--brand-amber)' : '#555';
+    panel.style.borderColor = color + '33';
+    panel.style.boxShadow = `0 0 20px ${color}15`;
+    panel.innerHTML = `
+      <div class="agents-detail-header">
+        <div class="agent-tile-status-dot ${status}" style="background:${statusColor}"></div>
+        <span class="agents-detail-name" style="color:${color}">${agent.name.charAt(0).toUpperCase()+agent.name.slice(1)}</span>
+      </div>
+      <div class="agents-detail-role">${agent.role}</div>
+      <div class="agents-detail-section">
+        <div class="agents-detail-label">Status</div>
+        <div class="agents-detail-value" style="color:${statusColor}">${status.toUpperCase()}</div>
+      </div>
+      <div class="agents-detail-section">
+        <div class="agents-detail-label">Last Task</div>
+        <div class="agents-detail-value">${agent.last_task || '—'}</div>
+      </div>
+      <div class="agents-detail-section">
+        <div class="agents-detail-label">Model</div>
+        <div class="agents-detail-value">${agent.model || '—'}</div>
+      </div>
+      <div class="agents-detail-section">
+        <div class="agents-detail-label">Activity</div>
+        <div class="agents-detail-value">${agent.total_logs || 0} total · ${agent.completed || 0} completed${agent.failed ? ' · ' + agent.failed + ' failed' : ''}</div>
+      </div>
+    `;
+  }
+
+  // Agents tab SSE
+  function setupAgentsSSE() {
+    if (isStandalone) {
+      renderAgentsTab(DEMO_DATA);
+      return;
+    }
+    if (typeof EventSource === 'undefined') {
+      setInterval(() => {
+        fetch('/api/snapshot').then(r => r.json()).then(d => renderAgentsTab(d)).catch(() => {});
+      }, 8000);
+      fetch('/api/snapshot').then(r => r.json()).then(d => renderAgentsTab(d)).catch(() => {});
+      return;
+    }
+    const es = new EventSource('/events');
+    es.onmessage = (ev) => {
+      try { renderAgentsTab(JSON.parse(ev.data)); } catch(e) {}
+    };
+    fetch('/api/snapshot').then(r => r.json()).then(d => renderAgentsTab(d)).catch(() => {});
+  }
+
+  // Start agents tab when visible
+  const agentsObserver = new MutationObserver(() => {
+    const panel = document.getElementById('panel-agents');
+    if (panel && panel.classList.contains('active') && !window._agentsStarted) {
+      window._agentsStarted = true;
+      setupAgentsSSE();
+    }
+  });
+  agentsObserver.observe(document.getElementById('panel-agents'), { attributes: true, attributeFilter: ['class'] });
+  if (document.getElementById('panel-agents').classList.contains('active')) {
+    window._agentsStarted = true;
+    setupAgentsSSE();
+  }
+
+  // Redraw lines on window resize
+  window.addEventListener('resize', () => {
+    if (document.getElementById('panel-agents').classList.contains('active')) {
+      drawDiagramLines();
+    }
+  });
 </script>
 </body>
 </html>

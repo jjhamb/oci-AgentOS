@@ -48,8 +48,8 @@
   <input id="sipPass"  type="password" placeholder="password" value="123456">
   <input id="sipDn"    placeholder="Display name"             value="jjhamb">
   <input id="sipDomain" placeholder="SIP domain"             value="localphone.com">
-  <input id="dialNum"  placeholder="Dial: 1002 or sip:1002@domain" value="jjhamb@sip.linphone.org">
-  <div class="dialpad" id="dialPad" style="display:none">
+  <input id="dialNum"  placeholder="Dial: 1002 or sip:1002@domain" value="">
+  <div class="dialpad">
     <button data-dial="1">1</button>
     <button data-dial="2">2</button>
     <button data-dial="3">3</button>
@@ -66,7 +66,6 @@
   <button class="btn btn-reg"  id="btnReg">🔗 Register</button>
   <button class="btn btn-call" id="btnCall" disabled>📞 Call</button>
   <button class="btn btn-hang" id="btnHang" disabled>🔴 Hang Up</button>
-  <button class="btn btn-reg"  id="btnLogout" style="display:none">🚪 Logout</button>
   <div class="log" id="log"></div>
 </div>
 <audio id="remoteAudio" autoplay></audio>
@@ -153,38 +152,36 @@ function doRegister() {
     authorizationUsername: user,
     authorizationPassword: pass,
     displayName: dn,
-    contactParams: { transport: "udp" },
     sessionDescriptionHandlerFactoryOptions: {
       peerConnectionConfiguration: {
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [{ urls: 'stun:' }]
       }
     },
-    logLevel: 'debug',
-    noAnswerTimeout: 300
+    logLevel: 'warn',
+    delegate: {
+      onInvite(invitation) {
+        log('Incoming call from ' + invitation.remoteIdentity.displayName, 'ok');
+        currentSession = invitation;
+        invitation.accept({ sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } })
+          .then(() => {
+            setStatus('📞 In call (incoming)', 'ok');
+            log('Call accepted', 'ok');
+            wireAudio(invitation);
+            document.getElementById('btnHang').disabled = false;
+          }).catch(e => log('Accept error: ' + e, 'err'));
+      }
+    }
   };
 
-  // Inbound call handler
   try {
-    // Monkey-patch SIP.js timer constants to increase timeouts
-    // Timer B controls INVITE client transaction timeout (default 32s → 5 min)
-    if (SIP.Timers) {
-      SIP.Timers.TIMER_B = 300000;  // 5 minutes - INVITE client transaction timeout
-      SIP.Timers.TIMER_F = 300000;  // non-INVITE transaction timeout
-      SIP.Timers.TIMER_H = 300000;  // 2xx wait timer
-      SIP.Timers.TIMER_L = 300000;  // accepted timeout
-      SIP.Timers.TIMER_M = 300000;  // 2xx retransmit last
-      log('Patched SIP.js timers: TIMER_B=' + SIP.Timers.TIMER_B);
-    }
-
     ua = new SIP.UserAgent(config);
 
-    // Debug: monitor transport events (DO NOT override onMessage — it's SIP.js's internal handler)
+    // Debug: monitor transport events
     ua.transport.onConnect = () => { log('Transport: CONNECTED', 'ok'); };
     ua.transport.onDisconnect = (error) => { log('Transport: DISCONNECTED' + (error ? ' (' + error + ')' : ''), 'warn'); };
+    ua.transport.onMessage = (msg) => { log('Transport: MSG ' + msg.byteLength + ' bytes', 'dbg'); };
 
     const registerer = new SIP.Registerer(ua);
-    registererRef = registerer;
-    uaRef = ua;
 
     registerer.stateChange.addListener(state => {
       log('Registerer state: ' + state);
@@ -192,19 +189,9 @@ function doRegister() {
         setStatus('✅ Registered as ' + user + '@' + domain, 'ok');
         log('Registered OK', 'ok');
         document.getElementById('btnCall').disabled = false;
-        // Transform UI: hide register controls, show call controls
-        document.getElementById('btnReg').style.display = 'none';
-        document.getElementById('btnLogout').style.display = 'inline-block';
-        document.getElementById('dialPad').style.display = 'grid';
-        document.getElementById('btnCall').style.display = 'inline-block';
-        document.getElementById('btnHang').style.display = 'inline-block';
-        document.getElementById('dialNum').focus();
       } else if (state === SIP.RegistererState.Unregistered) {
         setStatus('Unregistered', 'warn');
         document.getElementById('btnCall').disabled = true;
-        document.getElementById('btnReg').style.display = 'inline-block';
-        document.getElementById('btnLogout').style.display = 'none';
-        document.getElementById('dialPad').style.display = 'none';
       }
     });
 
@@ -223,17 +210,10 @@ function doRegister() {
 }
 
 function doCall() {
-  let target = document.getElementById('dialNum').value.trim();
+  const target = document.getElementById('dialNum').value.trim();
   if (!target || !ua) return;
   const domain = document.getElementById('sipDomain').value.trim();
-  // Build URI: if target already has @, use as-is (strip sip: if present); otherwise append @domain
-  target = target.replace(/^sip:/i, '');
-  let uri;
-  if (target.includes('@')) {
-    uri = 'sip:' + target;
-  } else {
-    uri = 'sip:' + target + '@' + domain;
-  }
+  const uri = target.startsWith('sip:') ? target : 'sip:' + target + '@' + domain;
 
   log('Calling ' + uri + '…', 'ok');
   setStatus('📞 Calling ' + target + '…', 'warn');
@@ -242,78 +222,34 @@ function doCall() {
     sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } }
   });
 
-  // Auto-fail after 120 seconds if call never establishes (give time for answer)
-  const callTimeout = setTimeout(() => {
-    if (currentSession === inviter && inviter.state !== SIP.SessionState.Established && inviter.state !== SIP.SessionState.Terminated) {
-      log('Call timeout — no response after 120s', 'warn');
-      setStatus('Call failed (no answer)', 'err');
-      try { if (inviter.cancel) inviter.cancel(); } catch(e) {}
-      if (currentSession === inviter) {
-        currentSession = null;
-        document.getElementById('btnHang').disabled = true;
-        document.getElementById('btnCall').disabled = false;
-      }
-    }
-  }, 300000);
-
   inviter.stateChange.addListener(state => {
     log('Session: ' + state);
     if (state === SIP.SessionState.Established) {
-      clearTimeout(callTimeout);
       setStatus('📞 In call with ' + target, 'ok');
       wireAudio(inviter);
       document.getElementById('btnHang').disabled = false;
       document.getElementById('btnCall').disabled = true;
-    } else if (state === SIP.SessionState.Establishing) {
-      setStatus('📞 Ringing ' + target + '…', 'warn');
-      document.getElementById('btnHang').disabled = false;
     } else if (state === SIP.SessionState.Terminated) {
-      clearTimeout(callTimeout);
       setStatus('Call ended', 'warn');
       document.getElementById('btnHang').disabled = true;
       document.getElementById('btnCall').disabled = false;
-      document.getElementById('remoteAudio').srcObject = null;
-      if (currentSession === inviter) {
-        currentSession = null;
-      }
     }
   });
 
-  inviter.invite().catch(e => { 
-    clearTimeout(callTimeout);
-    log('INVITE error: ' + e, 'err'); 
-    setStatus('Call failed', 'err');
-    if (currentSession === inviter) {
-      currentSession = null;
-      document.getElementById('btnHang').disabled = true;
-      document.getElementById('btnCall').disabled = false;
-    }
-  });
+  inviter.invite().catch(e => { log('INVITE error: ' + e, 'err'); setStatus('Call failed', 'err'); });
   currentSession = inviter;
 }
 
 function doHangup() {
   if (!currentSession) return;
   try {
-    log('Hangup: session state = ' + currentSession.state);
-    if (currentSession.state === SIP.SessionState.Established) {
-      currentSession.bye();
-    } else if (currentSession.state === SIP.SessionState.Establishing) {
-      // Call was never established — cancel the outgoing INVITE
-      if (currentSession.cancel) currentSession.cancel();
-      else if (currentSession.reject) currentSession.reject();
-    } else {
-      // Fallback: try all termination methods
-      try { currentSession.bye(); } catch(e) {}
-      try { if (currentSession.cancel) currentSession.cancel(); } catch(e) {}
-      try { if (currentSession.reject) currentSession.reject(); } catch(e) {}
-    }
+    if (currentSession.state === SIP.SessionState.Established) currentSession.bye();
+    else currentSession.cancel ? currentSession.cancel() : currentSession.reject();
   } catch(e) { log('Hangup error: ' + e, 'err'); }
   currentSession = null;
   setStatus('Call ended', 'warn');
   document.getElementById('btnHang').disabled = true;
   document.getElementById('btnCall').disabled = false;
-  document.getElementById('remoteAudio').srcObject = null;
 }
 
 function dial(digit) {
@@ -331,36 +267,10 @@ function wireAudio(session) {
   });
 }
 
-let registererRef = null;
-let uaRef = null;
-
-function doLogout() {
-  if (currentSession) {
-    try { currentSession.bye(); } catch(e) {}
-    currentSession = null;
-  }
-  if (registererRef) {
-    registererRef.unregister().catch(() => {});
-    registererRef = null;
-  }
-  if (uaRef) {
-    uaRef.stop().catch(() => {});
-    uaRef = null;
-  }
-  setStatus('Logged out', 'warn');
-  document.getElementById('btnHang').disabled = true;
-  document.getElementById('btnCall').disabled = true;
-  document.getElementById('btnReg').style.display = 'inline-block';
-  document.getElementById('btnLogout').style.display = 'none';
-  document.getElementById('dialPad').style.display = 'none';
-  document.getElementById('remoteAudio').srcObject = null;
-}
-
 // Attach event listeners (module scripts are deferred — DOM is ready)
 document.getElementById('btnReg').addEventListener('click', doRegister);
 document.getElementById('btnCall').addEventListener('click', doCall);
 document.getElementById('btnHang').addEventListener('click', doHangup);
-document.getElementById('btnLogout').addEventListener('click', doLogout);
 document.querySelectorAll('[data-dial]').forEach(btn => {
   btn.addEventListener('click', () => dial(btn.dataset.dial));
 });

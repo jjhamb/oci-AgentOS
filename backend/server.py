@@ -1706,6 +1706,81 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(500, {"error": str(e)})
             return
 
+        # Activity rate (per-minute metrics for sparkline)
+        if path == "/api/activity/rate":
+            result = {}
+            try:
+                now_ts = time.time()
+                min_ago = now_ts - 60
+                day_ago = now_ts - 86400
+
+                # Agent calls in last 60s (agent_logs.created_at is ISO text)
+                conn = sqlite3.connect(AGENT_LOGS_DB)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-1 minute')")
+                result['calls_per_min'] = cur.fetchone()[0]
+
+                # Failures in last 60s
+                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-1 minute')")
+                result['failures_per_min'] = cur.fetchone()[0]
+
+                # 24h totals for corrected stat tiles
+                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-24 hours')")
+                result['calls_24h'] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='completed' AND created_at > datetime('now', '-24 hours')")
+                result['completed_24h'] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-24 hours')")
+                result['failed_24h'] = cur.fetchone()[0]
+                conn.close()
+
+                # Messages in last 60s + 24h (messages.timestamp is REAL unix epoch)
+                conn2 = sqlite3.connect(STATE_DB)
+                conn2.row_factory = sqlite3.Row
+                cur2 = conn2.cursor()
+                cur2.execute("SELECT COUNT(*) FROM messages WHERE timestamp > ?", (min_ago,))
+                result['messages_per_min'] = cur2.fetchone()[0]
+                cur2.execute("SELECT COUNT(*) FROM messages WHERE timestamp > ?", (day_ago,))
+                result['messages_24h'] = cur2.fetchone()[0]
+
+                # Token throughput in last 60s (sessions.started_at is REAL unix epoch)
+                cur2.execute("""
+                    SELECT COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0)
+                    FROM sessions
+                    WHERE started_at > ?
+                """, (min_ago,))
+                result['tokens_per_min'] = cur2.fetchone()[0]
+
+                # Token totals 24h
+                cur2.execute("""
+                    SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0),
+                           COALESCE(SUM(cache_read_tokens), 0), COALESCE(SUM(cache_write_tokens), 0)
+                    FROM sessions WHERE started_at > ?
+                """, (day_ago,))
+                row = cur2.fetchone()
+                result['tokens_24h'] = {'input': row[0], 'output': row[1], 'cache_read': row[2], 'cache_write': row[3]}
+
+                # Active sessions in last 60s
+                cur2.execute("SELECT COUNT(*) FROM sessions WHERE started_at > ?", (min_ago,))
+                result['active_sessions'] = cur2.fetchone()[0]
+                conn2.close()
+
+                # Active running tasks from kanban
+                result['active_tasks'] = 0
+                try:
+                    kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
+                    kconn.execute("PRAGMA query_only=1")
+                    kcur = kconn.cursor()
+                    kcur.execute("SELECT COUNT(*) FROM tasks WHERE status = 'running'")
+                    result['active_tasks'] = kcur.fetchone()[0]
+                    kconn.close()
+                except Exception:
+                    pass
+
+                self._send_json(200, result)
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
         # SIP config
         if path == "/api/sip/config":
             self._send_json(200, load_sip_config())
