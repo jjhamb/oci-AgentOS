@@ -1867,15 +1867,15 @@ class Handler(BaseHTTPRequestHandler):
                 result['calls_per_key_per_day'] = 200
                 result['total_quota'] = len(pool) * 200
 
-                # Calls today — aligned to OpenRouter's UTC midnight reset
-                # OpenRouter resets at 00:00 UTC daily
+                # Calls today — aligned to OpenRouter's UTC midnight reset (00:00 UTC)
+                # SQLite 'start of day' operates on UTC by default for 'now'
                 conn = sqlite3.connect(STATE_DB)
                 cur = conn.cursor()
                 cur.execute("SELECT COALESCE(SUM(api_call_count), 0) FROM sessions WHERE started_at > strftime('%s','now','start of day')")
                 result['calls_today'] = cur.fetchone()[0]
 
                 # Hours until next UTC midnight reset
-                cur.execute("SELECT CAST((strftime('%s','now','start of day','+1 day') - strftime('%s','now')) / 3600 AS INTEGER)")
+                cur.execute("SELECT CAST((strftime('%s','now','start of day','+1 day') - strftime('%s','now')) / 3600.0 AS REAL)")
                 result['hours_until_reset'] = cur.fetchone()[0]
                 conn.close()
 
