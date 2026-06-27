@@ -1819,6 +1819,9 @@ class Handler(BaseHTTPRequestHandler):
                 result['provider'] = 'openrouter'
                 result['base_url'] = 'https://openrouter.ai/api/v1'
 
+                # Key rotation mode from config
+                result['rotation_mode'] = 'round_robin'
+
                 # Active key info from auth.json
                 auth_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.hermes', 'auth.json')
                 if not os.path.exists(auth_path):
