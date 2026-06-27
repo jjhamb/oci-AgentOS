@@ -1,0 +1,79 @@
+:root {
+  /* Color — Semantic aliases (what the UI uses) */
+  --bg-base: #15151F;
+  --bg-glass: rgba(31,31,43,0.55);
+  --border-glass: rgba(255,255,255,0.1);
+  --text-primary: #F4F4F8;
+  --text-muted: #8A8A9B;
+
+  /* Brand — Source of truth */
+  --brand-violet: #8B5CF6;
+  --brand-violet-glow: #A78BFA;
+  --brand-cyan: #7DD3FC;
+  --brand-mint: #5EE2B5;
+  --brand-amber: #F5B544;
+  --brand-red: #F26D6D;
+  --brand-pink: #F472B6;
+  --brand-gold: #FBBF24;
+  --brand-magenta: #E879F9;
+  --brand-teal: #2DD4BF;
+
+  /* Agent accents — map to semantic roles */
+  --agent-orchestrator: var(--brand-violet-glow);
+  --agent-analyst: var(--brand-cyan);
+  --agent-writer: var(--brand-pink);
+  --agent-marketer: var(--brand-magenta);
+  --agent-coder: var(--brand-teal);
+  --agent-infra: var(--brand-amber);
+  --agent-executor: var(--brand-mint);
+  --agent-sentinel: var(--brand-red);
+  --agent-web: var(--brand-gold);
+  --agent-publisher: var(--brand-violet);
+  --agent-reviewer: #6EE7B7;
+
+  /* Status */
+  --status-active: var(--brand-mint);
+  --status-idle: var(--brand-amber);
+  --status-dormant: var(--text-muted);
+  --status-success: var(--brand-mint);
+  --status-error: var(--brand-red);
+  --status-warning: var(--brand-amber);
+
+  /* Typography */
+  --font-display: 'Inter Tight', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
+  --font-size-2xl: clamp(36px, 4vw, 60px);
+  --font-size-3xl: clamp(34px, 4vw, 56px);
+  --letter-spacing-wide: 0.15em;
+
+  /* Spacing / Layout */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* Effects */
+  --blur-light: blur(4px);
+  --blur-medium: blur(8px);
+  --blur-heavy: blur(16px);
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+
+  /* Background orbs (pseudo-elements use these) */
+  --orb-violet: radial-gradient(ellipse at 20% 0%, rgba(139,92,246,0.15), transparent 60%);
+  --orb-cyan: radial-gradient(ellipse at 80% 40%, rgba(125,211,252,0.12), transparent 50%);
+  --grid-pattern: radial-gradient(circle, rgba(255,255,255,0.02) 1px, transparent 1px);
+  --grid-size: 24px;
+}

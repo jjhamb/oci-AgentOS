@@ -1426,6 +1426,91 @@
     .agent-tile { min-width: 150px; width: 150px; }
     .agent-tile.worker-tile { min-width: 120px; width: 120px; }
   }
+
+  /* ── Document Viewer (mammoth/docx, pdfjs, xlsx) ── */
+  .doc-viewer { height: 100%; overflow: auto; background: #0d1117; border-radius: var(--radius-md); }
+  .docx-rendered {
+    padding: 24px 32px; color: #c9d1d9;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 15px; line-height: 1.7;
+  }
+  .docx-rendered h1, .docx-rendered h2, .docx-rendered h3 {
+    color: #e6edf3; margin-top: 1.5em; margin-bottom: 0.5em;
+  }
+  .docx-rendered h1 { font-size: 1.8em; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.3em; }
+  .docx-rendered h2 { font-size: 1.4em; }
+  .docx-rendered h3 { font-size: 1.1em; }
+  .docx-rendered p { margin: 0.5em 0; }
+  .docx-rendered table {
+    border-collapse: collapse; width: 100%; margin: 1em 0;
+    font-family: var(--font-mono); font-size: 13px;
+  }
+  .docx-rendered td, .docx-rendered th {
+    border: 1px solid rgba(255,255,255,0.15); padding: 6px 12px; text-align: left;
+  }
+  .docx-rendered th { background: rgba(255,255,255,0.05); color: var(--brand-cyan); }
+  .docx-rendered img { max-width: 100%; height: auto; }
+  .pdf-toolbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 16px; background: #161b22;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .pdf-page-info { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .pdf-controls, .pdf-zoom { display: flex; align-items: center; gap: 4px; }
+  .pdf-zoom { margin-left: auto; }
+  .pdf-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-primary); padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; font-size: 11px; font-family: var(--font-mono);
+  }
+  .pdf-btn:hover { background: rgba(255,255,255,0.12); }
+  .pdf-scroller {
+    flex: 1; overflow: auto; padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    background: #161b22;
+  }
+  .pdf-scroller canvas { box-shadow: 0 2px 12px rgba(0,0,0,0.4); border-radius: 2px; }
+  .xlsx-wrapper { height: 100%; display: flex; flex-direction: column; }
+  .xlsx-tabs {
+    display: flex; gap: 2px; padding: 4px 8px;
+    background: #161b22; border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0; overflow-x: auto;
+  }
+  .xlsx-tab {
+    background: transparent; border: none; color: var(--text-muted);
+    padding: 6px 14px; border-radius: 4px; cursor: pointer;
+    font-size: 12px; font-family: var(--font-mono); white-space: nowrap;
+  }
+  .xlsx-tab:hover { background: rgba(255,255,255,0.06); }
+  .xlsx-tab.active { background: var(--brand-violet); color: #fff; }
+  .xlsx-area { flex: 1; overflow: auto; }
+  .xlsx-area table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 12px; }
+  .xlsx-area td, .xlsx-area th { border: 1px solid rgba(255,255,255,0.08); padding: 4px 10px; white-space: nowrap; }
+  .xlsx-area th { background: rgba(139,92,246,0.1); color: var(--brand-violet); position: sticky; top: 0; font-weight: 600; }
+  .xlsx-area tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .image-viewer { height: 100%; display: flex; flex-direction: column; }
+  .img-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; background: #161b22;
+    border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+  }
+  .img-dims { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-left: auto; }
+  .img-scroller {
+    flex: 1; overflow: auto; padding: 16px;
+    display: flex; align-items: flex-start; justify-content: center; background: #0d1117;
+  }
+  .img-scroller img { max-width: 100%; transition: max-width 0.15s ease; }
+  .doc-loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 200px; color: var(--text-muted); font-size: var(--font-size-sm); gap: 8px;
+  }
+  .doc-loading::before {
+    content: ''; width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--brand-violet);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  .doc-error { padding: 24px; color: var(--brand-red); font-size: var(--font-size-sm); text-align: center; line-height: 1.6; }
+  @keyframes spin { to { transform: rotate(360deg); }
 </style>
 </head>
 <body>
@@ -2950,6 +3035,15 @@
     document.getElementById('btnView').classList.add('active');
     document.getElementById('btnEdit').classList.remove('active');
 
+    // Delegate rich rendering to ContentViewer module
+    if (window.ContentViewer && ContentViewer.isSupported(ext)) {
+      body.innerHTML = '';
+      const absPath = data.path || (currentDir + '/' + document.getElementById('previewTitle').textContent);
+      ContentViewer.render(absPath, data, body);
+      return;
+    }
+
+    // Fallback for formats not handled by ContentViewer
     if (type === 'image') {
       body.innerHTML = '<div class="preview-image"><img src="data:' + (data.mime || 'image/png') + ';base64,' + data.content + '" alt="' + escapeHtml(currentFile) + '"></div>';
     } else if (type === 'text' && ext === '.md') {
@@ -2962,19 +3056,6 @@
       } else {
         body.innerHTML = '<div class="preview-text">' + escapeHtml(data.content) + '</div>';
       }
-    } else if (type === 'document') {
-      const fileIcon = { '.pdf': '📕', '.docx': '📘', '.xlsx': '📗' }[ext] || '�';
-      body.innerHTML =
-        '<div class="doc-preview">' +
-          '<div class="doc-preview-header">' +
-            '<span class="doc-icon">' + fileIcon + '</span>' +
-            '<span class="doc-ext">' + (ext || '').toUpperCase() + '</span>' +
-            '<span class="doc-size">' + (data.size ? formatSize(data.size) : '') + '</span>' +
-          '</div>' +
-          '<pre class="doc-content">' + escapeHtml(data.content) + '</pre>' +
-        '</div>';
-    } else if (type === 'html') {
-      body.innerHTML = '<iframe class="preview-html-frame" src="data:text/html;charset=utf-8,' + encodeURIComponent(data.content) + '"></iframe>';
     } else if (type === 'text' && isCodeExt(ext)) {
       body.innerHTML = buildCodePreview(data.content, ext);
     } else if (type === 'text') {
@@ -3236,5 +3317,6 @@
     }
   });
 </script>
+<script src="/js/content-viewer.js"></script>
 </body>
 </html>

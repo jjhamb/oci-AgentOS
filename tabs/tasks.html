@@ -809,7 +809,7 @@
           <div class="task-card-agent-dot" style="background:${agentColor}"></div>
           <span>${task.assignee || 'unassigned'}</span>
         </div>
-        <span class="task-card-priority ${pClass}">${task.priority || 'medium'}</span>
+        <span class="task-card-priority ${pClass}">P${task.priority != null ? task.priority : 'medium'}</span>
       </div>
       <div class="task-card-footer">
         <span class="task-card-age">${age}</span>

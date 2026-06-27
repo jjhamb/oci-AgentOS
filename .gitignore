@@ -30,7 +30,7 @@ Thumbs.db
 backend/board.db
 
 # Legacy root-level duplicates (kept for reference only)
-index.html
-index_v1.0_old.html
-components.js
-tokens.css
+/index.html
+/index_v1_0_old.html
+/components.js
+/tokens.css

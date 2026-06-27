@@ -1599,6 +1599,54 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "index.html not found"})
             return
 
+        # Serve vendor libraries from node_modules (mammoth.js, pdfjs-dist)
+        if path.startswith("/vendor/"):
+            # Map /vendor/mammoth/ -> node_modules/mammoth/browser/
+            rel = path[len("/vendor/"):]
+            base = os.path.dirname(os.path.abspath(__file__))
+            node_base = os.path.join(base, "node_modules")
+            # Direct file in node_modules or subpath
+            fpath = os.path.join(node_base, rel)
+            fpath = os.path.realpath(fpath)
+            if not fpath.startswith(os.path.realpath(node_base)):
+                self._send_json(403, {"error": "access denied"})
+                return
+            if not os.path.isfile(fpath):
+                self._send_json(404, {"error": "not found"})
+                return
+            ext_map = {".js": "application/javascript", ".mjs": "application/javascript", ".css": "text/css", ".map": "application/json"}
+            ctype = ext_map.get(os.path.splitext(fpath)[1], "application/octet-stream")
+            with open(fpath, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype + "; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        # Serve JS modules from backend/js/
+        if path.startswith("/js/"):
+            js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+            rel = path[len("/js/"):]
+            fpath = os.path.realpath(os.path.join(js_dir, rel))
+            if not fpath.startswith(os.path.realpath(js_dir)):
+                self._send_json(403, {"error": "access denied"})
+                return
+            if not os.path.isfile(fpath):
+                self._send_json(404, {"error": "not found"})
+                return
+            with open(fpath, "rb") as f:
+                data = f.read()
+            ext_map = {".js": "application/javascript", ".mjs": "application/javascript", ".map": "application/json"}
+            ctype = ext_map.get(os.path.splitext(fpath)[1], "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", ctype + "; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         # Serve standalone tab snapshots from tabs/ directory
         if path.startswith("/tabs/") and path.endswith(".html"):
             tab_name = os.path.basename(path)
