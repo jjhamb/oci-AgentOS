@@ -4,12 +4,19 @@ Hermes AgentOS — Mission Control Dashboard Backend
 Read-only monitoring server on 127.0.0.1:51763
 """
 
+import asyncio
 import base64
+import fcntl
 import json
 import os
+import pty
 import re
+import select
+import signal
 import sqlite3
+import struct
 import subprocess
+import termios
 import threading
 import time
 from datetime import datetime, timezone, timedelta
@@ -19,7 +26,7 @@ from urllib.parse import urlparse, parse_qs
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-LISTEN_HOST = "127.0.0.1"
+LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 51763
 
 GATEWAY_STATE_PATH = os.path.expanduser("~/.hermes/gateway_state.json")
@@ -2151,8 +2158,136 @@ class Handler(BaseHTTPRequestHandler):
 
 
 # ---------------------------------------------------------------------------
-# Main
+# PTY Terminal WebSocket handler
 # ---------------------------------------------------------------------------
+
+async def pty_handler(websocket):
+    """Handle a WebSocket connection with a persistent PTY shell.
+
+    Uses pty.openpty() + subprocess.Popen to avoid the fd-inheritance
+    issues that come with pty.fork() in a multi-threaded process.
+    """
+    shell = os.environ.get('SHELL', '/bin/bash')
+    cwd = os.path.expanduser('~')
+    loop = asyncio.get_event_loop()
+
+    # Create a PTY pair
+    master_fd, slave_fd = pty.openpty()
+
+    # Set initial window size
+    try:
+        winsize = struct.pack('HHHH', 24, 80, 0, 0)
+        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
+    except (PermissionError, OSError):
+        pass  # Some environments don't allow TIOCSWINSZ
+
+    env = os.environ.copy()
+    env['TERM'] = 'xterm-256color'
+    env['HOME'] = cwd
+
+    proc = subprocess.Popen(
+        [shell, '-i'],
+        stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+        cwd=cwd, env=env,
+        preexec_fn=os.setsid,
+    )
+    os.close(slave_fd)  # Close in parent after spawn
+
+    os.set_blocking(master_fd, False)
+    running = True
+    out_queue = asyncio.Queue()
+
+    def pty_reader():
+        """Blocking reader thread — reads from PTY master, pushes to queue."""
+        while running:
+            try:
+                r, _, _ = select.select([master_fd], [], [], 0.3)
+                if r:
+                    try:
+                        chunk = os.read(master_fd, 8192)
+                        if chunk:
+                            asyncio.run_coroutine_threadsafe(
+                                out_queue.put(chunk.decode('utf-8', errors='replace')), loop)
+                        else:
+                            break  # EOF
+                    except OSError:
+                        break
+            except (ValueError, OSError):
+                break
+        asyncio.run_coroutine_threadsafe(out_queue.put(None), loop)
+
+    reader_t = threading.Thread(target=pty_reader, daemon=True)
+    reader_t.start()
+
+    try:
+        while running:
+            # Drain queued PTY output → browser
+            try:
+                text = await asyncio.wait_for(out_queue.get(), timeout=0.05)
+                if text is None:
+                    break
+                await websocket.send(text)
+            except asyncio.TimeoutError:
+                pass
+
+            # Check for incoming keystrokes from browser
+            try:
+                msg = await asyncio.wait_for(websocket.recv(), timeout=0.02)
+                try:
+                    parsed = json.loads(msg)
+                    if parsed.get('type') == 'resize':
+                        cols = parsed.get('cols', 80)
+                        rows = parsed.get('rows', 24)
+                        try:
+                            winsize = struct.pack('HHHH', rows, cols, 0, 0)
+                            fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+                        except (PermissionError, OSError):
+                            pass
+                except json.JSONDecodeError:
+                    try:
+                        os.write(master_fd, msg.encode('utf-8'))
+                    except OSError:
+                        running = False
+            except (asyncio.TimeoutError, ConnectionError):
+                pass
+            except Exception:
+                pass
+    finally:
+        running = False
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+            os.close(master_fd)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        reader_t.join(timeout=2)
+
+
+TERMINAL_WS_PORT = 51765
+
+
+def terminal_ws_thread():
+    """Run the WebSocket terminal server in a dedicated thread with its own event loop."""
+    try:
+        import websockets
+    except ImportError:
+        print("  ⚠ websockets not available — terminal WS disabled")
+        return
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def run():
+        async with websockets.serve(pty_handler, '0.0.0.0', TERMINAL_WS_PORT):
+            print(f"  WS   ws://127.0.0.1:{TERMINAL_WS_PORT} → PTY terminal")
+            await asyncio.Event().wait()
+
+    try:
+        loop.run_until_complete(run())
+    except Exception as e:
+        print(f"  ⚠ Terminal WS error: {e}")
+
+
 def main():
     board_init()
 
@@ -2160,8 +2295,12 @@ def main():
     pusher = threading.Thread(target=sse_pusher, daemon=True)
     pusher.start()
 
+    # Start HTTP server in a background thread so main can host WS+PTY
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
     server.allow_reuse_address = True
+    http_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    http_thread.start()
+
     print(f"Mission Control Dashboard running on http://{LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  GET  /           → index.html")
     print(f"  GET  /api/snapshot → full JSON snapshot")
@@ -2179,14 +2318,10 @@ def main():
     print(f"  GET  /api/sip/webapp → SIP.js softphone")
     print(f"  POST /api/sip/call → make SIP call")
     print(f"  POST /api/terminal/exec → execute command")
-    print(f"  POST /api/terminal/hermes/start → start Hermes chat session")
-    print(f"  POST /api/terminal/hermes/send → send to Hermes session")
-    print(f"  POST /api/terminal/hermes/status → check Hermes session status")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nShutting down.")
-        server.shutdown()
+    print(f"  WS   ws://127.0.0.1:{TERMINAL_WS_PORT} → PTY terminal")
+
+    # Run WebSocket PTY terminal in MAIN thread (pty.fork requires single-thread)
+    terminal_ws_thread()
 
 
 if __name__ == "__main__":

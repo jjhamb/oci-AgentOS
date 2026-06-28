@@ -8,90 +8,153 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; background: #0a0a1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
-  #terminal-container { width: 100%; height: 100%; padding: 4px; }
-  .terminal-info {
-    position: fixed; top: 8px; right: 12px; z-index: 100;
-    font-size: 10px; color: #444; font-family: monospace;
-    background: rgba(10,10,26,0.85); padding: 4px 10px; border-radius: 6px;
-    border: 1px solid #1e293b;
+
+  .terminal-wrapper { display: flex; flex-direction: column; height: 100%; }
+  #terminal-container { flex: 1; padding: 0; overflow: hidden; }
+
+  /* Toolbar */
+  .term-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(15,15,30,0.95); border-bottom: 1px solid #1e293b;
+    padding: 6px 10px; font-size: 11px; color: #64748b;
+    font-family: monospace;
   }
-  .terminal-info .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .term-toolbar .title { color: #a78bfa; font-weight: 600; margin-right: auto; }
+  .term-toolbar label { display: flex; align-items: center; gap: 4px; }
+  .term-toolbar select, .term-toolbar input[type="range"] {
+    background: rgba(255,255,255,0.05); border: 1px solid #334155;
+    color: #94a3b8; font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-family: monospace;
+  }
+  .term-toolbar select:focus, .term-toolbar input:focus { outline: none; border-color: #7c3aed; }
+  .term-toolbar .status { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
   .dot-online { background: #10b981; }
   .dot-offline { background: #ef4444; }
-  #hermes-panel {
-    display: none;
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: rgba(10,10,26,0.95); border-top: 1px solid #1e293b;
-    padding: 12px 16px; font-size: 12px; color: #94a3b8;
-    font-family: monospace; max-height: 40%; overflow-y: auto;
-  }
-  #hermes-panel.visible { display: block; }
-  #hermes-panel .hermes-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 8px;
-  }
-  #hermes-panel .hermes-log { color: #e2e8f0; white-space: pre-wrap; line-height: 1.4; }
-  .hermes-btn {
-    font-size: 10px; padding: 3px 10px; border-radius: 4px;
-    border: 1px solid #334155; background: rgba(255,255,255,0.05);
-    color: #94a3b8; cursor: pointer;
-  }
-  .hermes-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+  .dot-connecting { background: #f59e0b; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Skin presets */
+  .skin-default { --bg: #0a0a1a; --fg: #e0e0e0; }
+  .skin-dracula { --bg: #282a36; --fg: #f8f8f2; }
+  .skin-nord { --bg: #2e3440; --fg: #d8dee9; }
+  .skin-monokai { --bg: #272822; --fg: #f8f8f2; }
+  .skin-gruvbox { --bg: #282828; --fg: #ebdbb2; }
+  .skin-solarized { --bg: #002b36; --fg: #839496; }
+
+  .xterm .xterm-viewport { background-color: transparent !important; }
 </style>
 </head>
-<body>
-<div id="terminal-container"></div>
-
-<div class="terminal-info" id="connStatus">
-  <span class="dot dot-online" id="connDot"></span>
-  <span id="connText">connecting…</span>
-</div>
-
-<div id="hermes-panel">
-  <div class="hermes-header">
-    <span style="color:#a78bfa;">⚡ Hermes Agent Session</span>
-    <div>
-      <button class="hermes-btn" id="hermesStart">Start</button>
-      <button class="hermes-btn" id="hermesClose" style="margin-left:4px;">Close</button>
-    </div>
+<body class="skin-default">
+<div class="terminal-wrapper">
+  <div class="term-toolbar">
+    <span class="title">⚡ TERMINAL</span>
+    <span class="status">
+      <span class="dot dot-connecting" id="connDot"></span>
+      <span id="connText">connecting…</span>
+    </span>
+    <label>Theme
+      <select id="skinSelect" onchange="setSkin(this.value)">
+        <option value="default">Default</option>
+        <option value="dracula">Dracula</option>
+        <option value="nord">Nord</option>
+        <option value="monokai">Monokai</option>
+        <option value="gruvbox">Gruvbox</option>
+        <option value="solarized">Solarized Dark</option>
+      </select>
+    </label>
+    <label>Font
+      <select id="fontSelect" onchange="setFont(this.value)">
+        <option value="13">13px</option>
+        <option value="11">11px</option>
+        <option value="12">12px</option>
+        <option value="14">14px</option>
+        <option value="16">16px</option>
+        <option value="18">18px</option>
+      </select>
+    </label>
+    <label>Font Family
+      <select id="fontFamilySelect" onchange="setFontFamily(this.value)">
+        <option value="'JetBrains Mono',monospace">JetBrains Mono</option>
+        <option value="'Fira Code',monospace">Fira Code</option>
+        <option value="'Cascadia Code',monospace">Cascadia Code</option>
+        <option value="'Source Code Pro',monospace">Source Code Pro</option>
+        <option value="monospace">System Mono</option>
+      </select>
+    </label>
+    <label>Opacity
+      <input type="range" id="opacityRange" min="0.5" max="1" step="0.05" value="1" oninput="setOpacity(this.value)" style="width:60px;">
+    </label>
+    <select id="modeSelect" onchange="setMode(this.value)" title="Shell mode">
+      <option value="bash">bash (shell)</option>
+      <option value="hermes">hermes (AI chat)</option>
+    </select>
   </div>
-  <div class="hermes-log" id="hermesLog"></div>
+  <div id="terminal-container"></div>
 </div>
 
-<!-- xterm.js via CDN — only dependency -->
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 (function() {
+  // ── Skin definitions ──
+  const SKINS = {
+    default:  { bg:'#0a0a1a', fg:'#e0e0e0', cursor:'#00d4ff', sel:'rgba(0,212,255,0.2)',
+                black:'#1a1a2e', red:'#ef4444', green:'#10b981', yellow:'#fbbf24', blue:'#3b82f6',
+                magenta:'#a78bfa', cyan:'#22d3d8', white:'#e0e0e0', brightBlack:'#4b5563',
+                brightRed:'#f87171', brightGreen:'#34d399', brightYellow:'#fcd34d', brightBlue:'#60a5fa',
+                brightMagenta:'#c4b5fd', brightCyan:'#67e8f9', brightWhite:'#ffffff' },
+    dracula:  { bg:'#282a36', fg:'#f8f8f2', cursor:'#f8f8f2', sel:'rgba(68,71,90,0.8)',
+                black:'#21222c', red:'#ff5555', green:'#50fa7b', yellow:'#f1fa8c', blue:'#bd93f9',
+                magenta:'#ff79c6', cyan:'#8be9fd', white:'#f8f8f2', brightBlack:'#6272a4',
+                brightRed:'#ff6e6e', brightGreen:'#69ff94', brightYellow:'#ffffa5', brightBlue:'#d6acff',
+                brightMagenta:'#ff92df', brightCyan:'#a4ffff', brightWhite:'#ffffff' },
+    nord:     { bg:'#2e3440', fg:'#d8dee9', cursor:'#d8dee9', sel:'rgba(67,76,94,0.6)',
+                black:'#3b4252', red:'#bf616a', green:'#a3be8c', yellow:'#ebcb8b', blue:'#81a1c1',
+                magenta:'#b48ead', cyan:'#88c0d0', white:'#e5e9f0', brightBlack:'#4c566a',
+                brightRed:'#bf616a', brightGreen:'#a3be8c', brightYellow:'#ebcb8b', brightBlue:'#81a1c1',
+                brightMagenta:'#b48ead', brightCyan:'#8fbcbb', brightWhite:'#eceff4' },
+    monokai:  { bg:'#272822', fg:'#f8f8f2', cursor:'#f8f8f2', sel:'rgba(73,72,62,0.9)',
+                black:'#272822', red:'#f92672', green:'#a6e22e', yellow:'#f4bf75', blue:'#66d9ef',
+                magenta:'#ae81ff', cyan:'#a1efe4', white:'#f8f8f2', brightBlack:'#75715e',
+                brightRed:'#f92672', brightGreen:'#a6e22e', brightYellow:'#f4bf75', brightBlue:'#66d9ef',
+                brightMagenta:'#ae81ff', brightCyan:'#a1efe4', brightWhite:'#f9f8f5' },
+    gruvbox:  { bg:'#282828', fg:'#ebdbb2', cursor:'#ebdbb2', sel:'rgba(60,56,54,0.8)',
+                black:'#282828', red:'#cc241d', green:'#98971a', yellow:'#d79921', blue:'#458588',
+                magenta:'#b16286', cyan:'#689d6a', white:'#a89984', brightBlack:'#928374',
+                brightRed:'#fb4934', brightGreen:'#b8bb26', brightYellow:'#fabd2f', brightBlue:'#83a598',
+                brightMagenta:'#d3869b', brightCyan:'#8ec07c', brightWhite:'#ebdbb2' },
+    solarized:{ bg:'#002b36', fg:'#839496', cursor:'#93a1a1', sel:'rgba(7,54,66,0.8)',
+                black:'#073642', red:'#dc322f', green:'#859900', yellow:'#b58900', blue:'#268bd2',
+                magenta:'#d33682', cyan:'#2aa198', white:'#eee8d5', brightBlack:'#586e75',
+                brightRed:'#cb4b16', brightGreen:'#586e75', brightYellow:'#657b83', brightBlue:'#839496',
+                brightMagenta:'#6c71c4', brightCyan:'#93a1a1', brightWhite:'#fdf6e3' },
+  };
+
+  // ── Terminal setup ──
+  let currentFont = 13;
+  let currentFamily = "'JetBrains Mono', monospace";
+
+  function buildTheme(skin) {
+    const s = SKINS[skin] || SKINS.default;
+    return {
+      background: s.bg, foreground: s.fg, cursor: s.cursor, selectionBackground: s.sel,
+      black: s.black, red: s.red, green: s.green, yellow: s.yellow, blue: s.blue,
+      magenta: s.magenta, cyan: s.cyan, white: s.white, brightBlack: s.brightBlack,
+      brightRed: s.brightRed, brightGreen: s.brightGreen, brightYellow: s.brightYellow,
+      brightBlue: s.brightBlue, brightMagenta: s.brightMagenta, brightCyan: s.brightCyan,
+      brightWhite: s.brightWhite
+    };
+  }
+
   const term = new Terminal({
     cursorBlink: true,
-    fontSize: 13,
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: currentFont,
+    fontFamily: currentFamily,
     convertEol: true,
-    theme: {
-      background: '#0a0a1a',
-      foreground: '#e0e0e0',
-      cursor: '#00d4ff',
-      selection: 'rgba(0,212,255,0.2)',
-      black: '#1a1a2e',
-      red: '#ef4444',
-      green: '#10b981',
-      yellow: '#fbbf24',
-      blue: '#3b82f6',
-      magenta: '#a78bfa',
-      cyan: '#22d3d8',
-      white: '#e0e0e0',
-      brightBlack: '#4b5563',
-      brightRed: '#f87171',
-      brightGreen: '#34d399',
-      brightYellow: '#fcd34d',
-      brightBlue: '#60a5fa',
-      brightMagenta: '#c4b5fd',
-      brightCyan: '#67e8f9',
-      brightWhite: '#ffffff'
-    },
-    scrollback: 5000,
-    allowProposedApi: true
+    scrollback: 10000,
+    allowProposedApi: true,
+    theme: buildTheme('default'),
   });
 
   const fitAddon = new FitAddon.FitAddon();
@@ -99,216 +162,123 @@
 
   const container = document.getElementById('terminal-container');
   term.open(container);
-
-  // Expose for debugging
+  fitAddon.fit();
   window.term = term;
 
-  function fitTerminal() {
-    fitAddon.fit();
-  }
-
-  fitTerminal();
-
+  function fitTerminal() { fitAddon.fit(); }
   window.addEventListener('resize', fitTerminal);
 
-  // State
-  let cwd = '/home/jayant';
-  let busy = false;
-  let cmdBuffer = '';
-  let cursorPos = 0;
-  let history = [];
-  let historyIdx = -1;
+  // ── Skin controls ──
+  window.setSkin = function(name) {
+    term.options.theme = buildTheme(name);
+    document.body.className = 'skin-' + name;
+  };
 
-  // Connect status
+  window.setFont = function(size) {
+    currentFont = parseInt(size);
+    term.options.fontSize = currentFont;
+    fitTerminal();
+  };
+
+  window.setFontFamily = function(family) {
+    currentFamily = family;
+    term.options.fontFamily = family;
+    fitTerminal();
+  };
+
+  window.setOpacity = function(val) {
+    container.style.opacity = val;
+  };
+
+  // ── WebSocket PTY connection ──
+  const WS_PORT = 51765;
+  let ws;
+  let reconnectTimer;
+  let mode = 'bash';
+
   const connDot = document.getElementById('connDot');
   const connText = document.getElementById('connText');
-  let hasFocus = false;
+  const modeSelect = document.getElementById('modeSelect');
 
-  function setConnStatus(online) {
-    connDot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
-    connText.textContent = online ? 'online (' + cwd + ')' : 'offline';
+  function setConnStatus(state) {
+    connDot.className = 'dot dot-' + state;
+    if (state === 'online') connText.textContent = 'connected';
+    else if (state === 'offline') connText.textContent = 'disconnected';
+    else connText.textContent = 'connecting…';
   }
 
-  // Initial prompt
-  function writePrompt() {
-    term.write('\r\x1b[0m\x1b[36m➜\x1b[0m \x1b[34m' + cwd + '\x1b[0m \x1b[32m$\x1b[0m ');
-    cmdBuffer = '';
-    cursorPos = 0;
-  }
+  function connect() {
+    setConnStatus('connecting');
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.hostname}:${WS_PORT}`);
 
-  writePrompt();
-  setConnStatus(true);
-
-  // Process a command
-  async function runCommand(raw) {
-    const cmd = raw.trim();
-    if (!cmd) { writePrompt(); return; }
-
-    // Built-in: cd
-    if (cmd === 'cd' || cmd.startsWith('cd ')) {
-      const target = cmd.slice(2).trim() || '/home/jayant';
-      try {
-        const resp = await fetch('/api/terminal/exec', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'cd ' + target + ' && pwd', cwd })
-        });
-        const data = await resp.json();
-        if (data.exit_code === 0) {
-          cwd = data.stdout.trim();
-          setConnStatus(true);
-        } else {
-          term.write('\r\n  \x1b[31m' + (data.stderr || 'no such directory') + '\x1b[0m');
-        }
-      } catch(e) {
-        term.write('\r\n  \x1b[31m' + e.message + '\x1b[0m');
+    ws.onopen = () => {
+      setConnStatus('online');
+      // Send initial resize
+      const dims = fitAddon.proposeDimensions();
+      if (dims) {
+        ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
       }
-      writePrompt();
-      return;
-    }
-
-    // Built-in: clear
-    if (cmd === 'clear') {
-      term.clear();
-      writePrompt();
-      return;
-    }
-
-    // Built-in: exit
-    if (cmd === 'exit') {
-      term.write('\r\n  \x1b[33m(embedded terminal — close tab to exit)\x1b[0m');
-      writePrompt();
-      return;
-    }
-
-    // Send to server
-    busy = true;
-    term.write('\r\n');
-    try {
-      const resp = await fetch('/api/terminal/exec', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd, cwd })
-      });
-      const data = await resp.json();
-
-      if (data.stdout) term.write(data.stdout);
-      if (data.stderr) term.write('\x1b[31m' + data.stderr + '\x1b[0m');
-      if (data.exit_code !== 0 && data.exit_code !== undefined && !data.stdout && !data.stderr) {
-        term.write('  \x1b[33mexit: ' + data.exit_code + '\x1b[0m');
+      // If hermes mode, start hermes after connection
+      if (mode === 'hermes') {
+        setTimeout(() => ws.send('\n'), 500);
       }
-    } catch(e) {
-      term.write('\r\n  \x1b[31m' + e.message + '\x1b[0m');
-      setConnStatus(false);
-    }
-    busy = false;
-    writePrompt();
+    };
+
+    ws.onmessage = (event) => {
+      term.write(event.data);
+    };
+
+    ws.onclose = () => {
+      setConnStatus('offline');
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      setConnStatus('offline');
+    };
   }
 
-  // Input handling
+  // Send input
   term.onData(data => {
-    if (busy) return;
-
-    const code = data.charCodeAt(0);
-
-    if (data === '\r') { // Enter
-      term.write('\r\n');
-      history.unshift(cmdBuffer);
-      if (history.length > 200) history.pop();
-      historyIdx = -1;
-      runCommand(cmdBuffer);
-      return;
-    }
-
-    if (data === '\x7f') { // Backspace
-      if (cursorPos > 0) {
-        cmdBuffer = cmdBuffer.slice(0, cursorPos - 1) + cmdBuffer.slice(cursorPos);
-        cursorPos--;
-        term.write('\x1b[1D\x1b[0K' + cmdBuffer.slice(cursorPos));
-        term.write('\x1b[' + (cmdBuffer.length - cursorPos) + 'D');
-      }
-      return;
-    }
-
-    if (data === '\x1b[A') { // Up arrow
-      if (historyIdx < history.length - 1) {
-        historyIdx++;
-        cmdBuffer = history[historyIdx];
-        cursorPos = cmdBuffer.length;
-        term.write('\r\x1b[2K');
-        writePromptRaw();
-      }
-      return;
-    }
-
-    if (data === '\x1b[B') { // Down arrow
-      if (historyIdx > 0) {
-        historyIdx--;
-        cmdBuffer = history[historyIdx];
-      } else {
-        historyIdx = -1;
-        cmdBuffer = '';
-      }
-      cursorPos = cmdBuffer.length;
-      term.write('\r\x1b[2K');
-      writePromptRaw();
-      return;
-    }
-
-    if (data === '\x1b[C') { // Right arrow
-      if (cursorPos < cmdBuffer.length) {
-        cursorPos++;
-        term.write('\x1b[1C');
-      }
-      return;
-    }
-
-    if (data === '\x1b[D') { // Left arrow
-      if (cursorPos > 0) {
-        cursorPos--;
-        term.write('\x1b[1D');
-      }
-      return;
-    }
-
-    // Regular character
-    cmdBuffer = cmdBuffer.slice(0, cursorPos) + data + cmdBuffer.slice(cursorPos);
-    cursorPos++;
-    term.write('\x1b[0K' + cmdBuffer.slice(cursorPos - 1));
-    if (cursorPos < cmdBuffer.length) {
-      term.write('\x1b[' + (cmdBuffer.length - cursorPos) + 'D');
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(data);
     }
   });
 
-  function writePromptRaw() {
-    term.write('\x1b[36m➜\x1b[0m \x1b[34m' + cwd + '\x1b[0m \x1b[32m$\x1b[0m ' + cmdBuffer);
-  }
+  // Resize handler
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      fitTerminal();
+      const dims = fitAddon.proposeDimensions();
+      if (dims && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+      }
+    }, 200);
+  });
 
-  // --- Hermes Agent Session Panel ---
-  const hermesPanel = document.getElementById('hermes-panel');
-  const hermesLog = document.getElementById('hermesLog');
-  const hermesStart = document.getElementById('hermesStart');
-  const hermesClose = document.getElementById('hermesClose');
-
-  hermesStart.addEventListener('click', async () => {
-    hermesPanel.classList.add('visible');
-    hermesLog.textContent = 'Starting Hermes session…\n';
-    try {
-      const resp = await fetch('/api/terminal/hermes/start', { method: 'POST' });
-      const data = await resp.json();
-      hermesLog.textContent += data.message + '\n';
-    } catch(e) {
-      hermesLog.textContent += 'Error: ' + e.message + '\n';
+  // Hermes mode
+  window.setMode = function(m) {
+    mode = m;
+    if (m === 'hermes') {
+      // Relaunch shell with hermes CLI
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // Exit current shell, start hermes
+        ws.send('exit\n');
+        setTimeout(() => ws.send('hermes\n'), 300);
+      }
+    } else {
+      // Go back to bash
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send('exit\n');
+      }
     }
-  });
+  };
 
-  hermesClose.addEventListener('click', () => {
-    hermesPanel.classList.remove('visible');
-  });
-
-  // Draggable resize
-  window.addEventListener('resize', () => fitAddon.fit());
-
+  // Start
+  connect();
 })();
 </script>
 </body>
