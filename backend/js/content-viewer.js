@@ -21,35 +21,14 @@
     return new Promise((resolve, reject) => {
       if (_vendorLoaded[name]) return resolve();
       if (src.endsWith('.mjs')) {
-        // Load ES module via Blob URL + dynamic import (handles import.meta)
-        fetch(src)
-          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-          .then(code => {
-            const blob = new Blob([code], { type: 'text/javascript' });
-            const url = URL.createObjectURL(blob);
-            return import(url).then(mod => {
-              URL.revokeObjectURL(url);
-              // Build window.pdfjsLib from named exports (pdfjs v4 is pure ESM)
-              window.pdfjsLib = {
-                getDocument: mod.getDocument,
-                GlobalWorkerOptions: mod.GlobalWorkerOptions || {},
-                Util: mod.Util,
-                build: mod.build,
-                version: mod.version,
-                AbortException: mod.AbortException,
-                OPS: mod.OPS,
-                ImageKind: mod.ImageKind,
-                OutputScale: mod.OutputScale,
-                PasswordResponses: mod.PasswordResponses,
-                PermissionFlag: mod.PermissionFlag,
-                RenderingCancelledException: mod.RenderingCancelledException,
-                TextLayer: mod.TextLayer,
-              };
-              _vendorLoaded[name] = true;
-              resolve();
-            });
-          })
-          .catch(() => reject(new Error('Failed to load ' + name)));
+        // Load ES module via <script type="module"> and then copy exports to window
+        // This avoids import.meta issues while giving us access to named exports
+        const tag = document.createElement('script');
+        tag.type = 'module';
+        tag.textContent = `import * as _mod from '${src}'; Object.assign(window, _mod);`;
+        tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
+        tag.onerror = () => reject(new Error('Failed to load ' + name));
+        document.head.appendChild(tag);
       } else {
         const tag = document.createElement('script');
         tag.src = src;
@@ -66,10 +45,13 @@
       loadVendor('pdfjsLib', '/vendor/pdfjs-dist/build/pdf.min.mjs'),
       loadVendor('XLSX', '/vendor/xlsx/dist/xlsx.full.min.js'),
     ]);
-    // Configure pdf.js worker
+    // Configure pdf.js to use fake worker mode (avoid CORS/cross-origin worker issues)
     if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-      window.pdfjsLib.GlobalOptions.workerSrc =
-        '/vendor/pdfjs-dist/build/pdf.worker.min.mjs';
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    }
+    // Also patch via the module's raw export if still present
+    if (window.GlobalWorkerOptions) {
+      window.GlobalWorkerOptions.workerSrc = '';
     }
   }
 
