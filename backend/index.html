@@ -413,6 +413,56 @@
   .col-blocked .kanban-col-count { color: var(--col-blocked); }
   .col-done .kanban-col-count { color: var(--col-done); }
 
+  /* ── KANBAN MOBILE RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .kanban-board {
+      grid-template-columns: repeat(3, minmax(100px, 1fr));
+      gap: var(--space-2);
+    }
+    .kanban-column {
+      min-width: auto;
+      min-height: 120px;
+      padding: var(--space-1);
+    }
+    .kanban-col-header {
+      padding: 2px 4px;
+      margin-bottom: var(--space-1);
+    }
+    .kanban-col-name {
+      font-size: 10px;
+    }
+    .kanban-col-count {
+      font-size: 10px;
+    }
+    .kanban-card {
+      padding: 4px 6px;
+      margin-bottom: 4px;
+    }
+    .kanban-card-title {
+      font-size: 11px;
+    }
+    .kanban-card-meta {
+      display: none; /* hide assignee/time on mobile to save space */
+    }
+  }
+  @media (max-width: 480px) {
+    .kanban-board {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-1);
+    }
+    .kanban-column {
+      min-height: auto;
+    }
+    .kanban-col-cards:has(.kanban-col-empty) {
+      display: none;
+    }
+    .kanban-card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+  }
+
   /* ═══════════════════════════════════════════
      SCHEDULE TAB
      ═══════════════════════════════════════════ */
