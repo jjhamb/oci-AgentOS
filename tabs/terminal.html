@@ -43,11 +43,89 @@
   .skin-solarized { --bg: #002b36; --fg: #839496; }
 
   .xterm .xterm-viewport { background-color: transparent !important; }
+
+  /* ── MOBILE RESPONSIVE ─────────────────────────────────── */
+  /* Toolbar: collapse into a toggleable menu on small screens */
+  .toolbar-toggle {
+    display: none;
+    background: rgba(139,92,246,0.15);
+    border: 1px solid #7c3aed;
+    color: #a78bfa;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: monospace;
+  }
+
+  @media (max-width: 768px) {
+    .toolbar-toggle { display: inline-flex; }
+
+    .term-toolbar {
+      flex-wrap: wrap;
+      padding: 4px 6px;
+      gap: 4px;
+    }
+
+    .term-toolbar .title {
+      width: 100%;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .term-toolbar label {
+      font-size: 10px;
+      gap: 2px;
+    }
+
+    .term-toolbar select,
+    .term-toolbar input[type="range"] {
+      font-size: 9px;
+      padding: 1px 3px;
+      max-width: 70px;
+    }
+
+    .term-toolbar input[type="range"] {
+      width: 40px !important;
+    }
+
+    /* Hidden state — toolbar collapses to single row on mobile */
+    .term-toolbar.collapsed .status,
+    .term-toolbar.collapsed label,
+    .term-toolbar.collapsed select,
+    .term-toolbar.collapsed input {
+      display: none;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .term-toolbar select {
+      max-width: 55px;
+    }
+    .term-toolbar label {
+      font-size: 9px;
+    }
+    #terminal-container {
+      font-size: 10px;
+    }
+  }
+
+  /* Larger touch targets for mode toggle on mobile */
+  @media (max-width: 768px) and (pointer: coarse) {
+    .term-toolbar select,
+    .term-toolbar input,
+    .term-toolbar button,
+    .toolbar-toggle {
+      min-height: 32px;
+      min-width: 32px;
+    }
+  }
 </style>
 </head>
 <body class="skin-default">
 <div class="terminal-wrapper">
-  <div class="term-toolbar">
+  <div class="term-toolbar" id="termToolbar">
+    <button class="toolbar-toggle" id="toolbarToggle" onclick="toggleToolbar()" title="Toggle controls">☰</button>
     <span class="title">⚡ TERMINAL</span>
     <span class="status">
       <span class="dot dot-connecting" id="connDot"></span>
@@ -189,6 +267,26 @@
   window.setOpacity = function(val) {
     container.style.opacity = val;
   };
+
+  // ── Toolbar collapse for mobile ──
+  let toolbarExpanded = false; // start collapsed on mobile, expanded on desktop
+  function toggleToolbar() {
+    const tb = document.getElementById('termToolbar');
+    toolbarExpanded = !toolbarExpanded;
+    tb.classList.toggle('collapsed', !toolbarExpanded);
+  }
+  // Auto-collapse on small screens at load
+  function autoCollapseToolbar() {
+    if (window.innerWidth <= 768) {
+      toolbarExpanded = false;
+      document.getElementById('termToolbar').classList.add('collapsed');
+    } else {
+      toolbarExpanded = true;
+      document.getElementById('termToolbar').classList.remove('collapsed');
+    }
+  }
+  window.addEventListener('resize', autoCollapseToolbar);
+  autoCollapseToolbar();
 
   // ── WebSocket PTY connection ──
   const WS_PORT = 51765;
