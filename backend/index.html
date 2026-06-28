@@ -282,9 +282,10 @@
   }
   .kanban-board {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(6, minmax(160px, 1fr));
     gap: var(--space-3);
     align-items: start;
+    overflow-x: auto;
   }
   .kanban-column {
     background: rgba(255,255,255,0.02);
@@ -292,6 +293,8 @@
     border-radius: var(--radius-md);
     padding: var(--space-2);
     min-height: 200px;
+    min-width: 160px;
+    flex: 1;
   }
   .kanban-col-header {
     display: flex;
@@ -351,10 +354,6 @@
     font-size: var(--font-size-sm);
     color: var(--text-primary);
     line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
   .kanban-card-meta {
     display: flex;
