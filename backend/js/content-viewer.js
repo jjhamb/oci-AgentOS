@@ -442,6 +442,8 @@
     }
   };
 
+  console.log('[CV] module loaded, isSupported(.docx)=', isSupported('.docx'), 'isSupported(.pdf)=', isSupported('.pdf'));
+
   // ── Init vendor loading early ──────────────────────────
   ensureAllVendors();
 })();
