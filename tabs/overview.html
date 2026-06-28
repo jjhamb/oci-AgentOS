@@ -1558,8 +1558,8 @@
     const tokens24h = rate24h.tokens_24h || tokens;
     const cost24h = rate24h.cost_24h ?? 0;
 
-    // Integrity — real success rate (24h completed / total, excluding synthetics)
-    const integrityTotal = calls24h;
+    // Integrity — success rate excluding non-terminal sessions (running/pending)
+    const integrityTotal = completed24h + failed24h;
     const integrity = integrityTotal > 0 ? ((completed24h / integrityTotal) * 100).toFixed(1) : '100.0';
     document.getElementById('statIntegrity').textContent = integrity + '%';
     document.getElementById('statIntegritySub').textContent = `${completed24h} of ${integrityTotal} successful`;
