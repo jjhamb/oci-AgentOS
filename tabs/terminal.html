@@ -4,624 +4,303 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hermes AgentOS — Terminal</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/backend/xterm.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 <style>
-  /* ═══════════ DESIGN TOKENS ═══════════ */
-  :root {
-    --bg-base: #15151F;
-    --bg-glass: rgba(31,31,43,0.55);
-    --border-glass: rgba(255,255,255,0.1);
-    --text-primary: #F4F4F8;
-    --text-muted: #8A8A9B;
-    --brand-violet: #8B5CF6;
-    --brand-violet-glow: #A78BFA;
-    --brand-cyan: #7DD3FC;
-    --brand-mint: #5EE2B5;
-    --brand-amber: #F5B544;
-    --brand-red: #F26D6D;
-    --brand-pink: #F472B6;
-    --brand-gold: #FBBF24;
-    --brand-magenta: #E879F9;
-    --brand-teal: #2DD4BF;
-    --font-display: 'Inter Tight', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-    --font-size-xs: 10px;
-    --font-size-sm: 12px;
-    --font-size-base: 14px;
-    --font-size-lg: 18px;
-    --font-size-xl: 22px;
-    --letter-spacing-wide: 0.15em;
-    --space-1: 4px;
-    --space-2: 8px;
-    --space-3: 16px;
-    --space-4: 24px;
-    --space-5: 32px;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --radius-full: 999px;
-    --transition-fast: 150ms ease;
-    --transition-normal: 250ms ease;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #0a0a1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+  #terminal-container { width: 100%; height: 100%; padding: 4px; }
+  .terminal-info {
+    position: fixed; top: 8px; right: 12px; z-index: 100;
+    font-size: 10px; color: #444; font-family: monospace;
+    background: rgba(10,10,26,0.85); padding: 4px 10px; border-radius: 6px;
+    border: 1px solid #1e293b;
   }
-
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-  html { font-size: 16px; }
-  body {
-    font-family: var(--font-mono);
-    background: var(--bg-base);
-    color: var(--text-primary);
-    min-height: 100vh;
-    overflow-x: hidden;
+  .terminal-info .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .dot-online { background: #10b981; }
+  .dot-offline { background: #ef4444; }
+  #hermes-panel {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(10,10,26,0.95); border-top: 1px solid #1e293b;
+    padding: 12px 16px; font-size: 12px; color: #94a3b8;
+    font-family: monospace; max-height: 40%; overflow-y: auto;
   }
-
-  /* ── Ambient Background ── */
-  .bg-orb { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-  .bg-orb::before, .bg-orb::after {
-    content: ''; position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.5;
-  }
-  .bg-orb::before {
-    width: 600px; height: 600px; top: -10%; left: -5%;
-    background: radial-gradient(circle, rgba(139,92,246,0.35), transparent 70%);
-    animation: float-orb 12s ease-in-out infinite alternate;
-  }
-  .bg-orb::after {
-    width: 500px; height: 500px; bottom: -15%; right: -5%;
-    background: radial-gradient(circle, rgba(125,211,252,0.25), transparent 70%);
-    animation: float-orb 15s ease-in-out infinite alternate-reverse;
-  }
-  @keyframes float-orb {
-    0% { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(30px, 20px) scale(1.05); }
-  }
-  .bg-grid {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-
-  /* ── Top Nav Bar ── */
-  .nav {
-    position: sticky; top: 0; z-index: 100;
+  #hermes-panel.visible { display: block; }
+  #hermes-panel .hermes-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: var(--space-2) var(--space-4);
-    background: rgba(21, 21, 31, 0.5);
-    backdrop-filter: blur(20px) saturate(1.5);
-    -webkit-backdrop-filter: blur(20px) saturate(1.5);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+    margin-bottom: 8px;
   }
-  .brand { display: flex; align-items: center; gap: var(--space-2); }
-  .brand-mark { position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
-  .brand-ring {
-    position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--brand-violet), var(--brand-cyan), var(--brand-mint), var(--brand-violet));
-    box-shadow: 0 0 16px rgba(139,92,246,0.4), 0 0 40px rgba(139,92,246,0.15);
-    animation: spin-ring 8s linear infinite;
+  #hermes-panel .hermes-log { color: #e2e8f0; white-space: pre-wrap; line-height: 1.4; }
+  .hermes-btn {
+    font-size: 10px; padding: 3px 10px; border-radius: 4px;
+    border: 1px solid #334155; background: rgba(255,255,255,0.05);
+    color: #94a3b8; cursor: pointer;
   }
-  @keyframes spin-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .brand-inner { position: absolute; inset: 4px; border-radius: 50%; background: var(--bg-base); }
-  .brand-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-mint); z-index: 2; animation: pulse-dot 2s ease-in-out infinite; }
-  @keyframes pulse-dot {
-    0%, 100% { box-shadow: 0 0 4px 2px rgba(94,226,181,0.4); transform: scale(1); }
-    50% { box-shadow: 0 0 10px 6px rgba(94,226,181,0.15); transform: scale(1.15); }
-  }
-  .brand-name {
-    font-family: var(--font-display); font-weight: 700; font-size: var(--font-size-lg);
-    background: linear-gradient(135deg, var(--brand-violet-glow), var(--brand-cyan));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  }
-  .tab-row { display: flex; align-items: center; gap: 2px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-full); padding: 3px; }
-  .tab-btn { padding: var(--space-1) var(--space-3); border: none; background: transparent; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--font-size-sm); font-weight: 500; border-radius: var(--radius-full); cursor: pointer; transition: all var(--transition-fast); white-space: nowrap; }
-  .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
-  .tab-btn.active { background: rgba(255,255,255,0.92); color: var(--bg-base); font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-  .nav-right { display: flex; align-items: center; gap: var(--space-3); }
-  .status-pill { display: flex; align-items: center; gap: var(--space-1); padding: 5px var(--space-2); background: rgba(94,226,181,0.1); border: 1px solid rgba(94,226,181,0.25); border-radius: var(--radius-full); font-size: var(--font-size-xs); color: var(--brand-mint); letter-spacing: var(--letter-spacing-wide); text-transform: uppercase; }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-mint); animation: pulse-dot 2s ease-in-out infinite; }
-
-  /* ── Main ── */
-  .main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: var(--space-4); }
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-
-  /* ── Glass Card ── */
-  .glass-card {
-    background: rgba(31,31,43,0.5);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
-  }
-
-  /* ═══════════════════════════════════════════
-     TERMINAL TAB
-     ═══════════════════════════════════════════ */
-
-  .terminal-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: var(--space-4);
-  }
-  .terminal-eyebrow { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--text-muted); letter-spacing: var(--letter-spacing-wide); text-transform: uppercase; }
-  .terminal-title { font-family: var(--font-display); font-size: clamp(36px, 4vw, 60px); font-weight: 500; color: var(--text-primary); line-height: 1.1; margin-top: var(--space-1); }
-
-  .terminal-layout {
-    display: flex; flex-direction: column; gap: var(--space-3);
-  }
-
-  /* ── Quick Actions Bar ── */
-  .terminal-quickbar {
-    display: flex; flex-wrap: wrap; gap: var(--space-2);
-    padding: var(--space-3);
-    background: rgba(31,31,43,0.4);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: var(--radius-lg);
-  }
-  .quick-sep {
-    width: 1px; background: rgba(255,255,255,0.08);
-    margin: 0 var(--space-1); flex-shrink: 0;
-  }
-  .quick-label {
-    font-size: var(--font-size-xs); color: var(--text-muted);
-    letter-spacing: var(--letter-spacing-wide); text-transform: uppercase;
-    display: flex; align-items: center; padding-right: var(--space-2);
-  }
-  .quick-btn {
-    padding: 4px 12px; border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.04); color: var(--text-primary);
-    border-radius: var(--radius-sm); cursor: pointer;
-    font-size: var(--font-size-xs); font-family: var(--font-mono);
-    transition: all var(--transition-fast);
-    display: flex; align-items: center; gap: 4px;
-  }
-  .quick-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
-  .quick-btn:active { transform: scale(0.97); }
-  .quick-btn-brand { border-color: rgba(139,92,246,0.25); }
-  .quick-btn-brand:hover { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.4); }
-  .quick-btn-danger { border-color: rgba(242,109,109,0.25); }
-  .quick-btn-danger:hover { background: rgba(242,109,109,0.12); border-color: rgba(242,109,109,0.4); }
-  .quick-btn-success { border-color: rgba(94,226,181,0.25); }
-  .quick-btn-success:hover { background: rgba(94,226,181,0.12); border-color: rgba(94,226,181,0.4); }
-
-  /* ── Terminal Container ── */
-  .terminal-container {
-    background: rgba(0,0,0,0.4);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-  .terminal-tabs {
-    display: flex; align-items: center;
-    padding: var(--space-2) var(--space-3) 0;
-    background: rgba(255,255,255,0.02);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    gap: 2px; overflow-x: auto;
-  }
-  .terminal-tab {
-    padding: 4px 12px;
-    font-size: var(--font-size-xs); font-family: var(--font-mono);
-    color: var(--text-muted); cursor: pointer;
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .terminal-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
-  .terminal-tab.active { color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-bottom: none; }
-  .terminal-tab-close {
-    width: 14px; height: 14px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; opacity: 0; transition: all var(--transition-fast);
-  }
-  .terminal-tab:hover .terminal-tab-close { opacity: 0.6; }
-  .terminal-tab-close:hover { opacity: 1 !important; background: rgba(242,109,109,0.3); }
-  .terminal-new-tab {
-    padding: 4px 8px; font-size: var(--font-size-sm);
-    color: var(--text-muted); cursor: pointer;
-    border-radius: var(--radius-sm); transition: all var(--transition-fast);
-  }
-  .terminal-new-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
-
-  .terminal-xterm-wrap {
-    padding: var(--space-3);
-    min-height: 400px;
-  }
-
-  /* ── Fallback exec terminal (no xterm.js) ── */
-  .terminal-exec {
-    display: flex; flex-direction: column; gap: var(--space-2);
-    padding: var(--space-3);
-  }
-  .terminal-output {
-    flex: 1; min-height: 350px; max-height: 500px; overflow-y: auto;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    font-family: var(--font-mono); font-size: var(--font-size-sm);
-    line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-  }
-  .terminal-output::-webkit-scrollbar { width: 4px; }
-  .terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-  .terminal-output .output-line { margin: 1px 0; }
-  .terminal-output .output-cmd { color: var(--brand-cyan); }
-  .terminal-output .output-err { color: var(--brand-red); }
-  .terminal-output .output-success { color: var(--brand-mint); }
-
-  .terminal-input-row {
-    display: flex; align-items: center; gap: var(--space-2);
-  }
-  .terminal-prompt {
-    font-family: var(--font-mono); font-size: var(--font-size-sm);
-    color: var(--brand-mint); flex-shrink: 0;
-  }
-  .terminal-input {
-    flex: 1; padding: var(--space-2) var(--space-3);
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-family: var(--font-mono); font-size: var(--font-size-sm);
-    outline: none; caret-color: var(--brand-mint);
-  }
-  .terminal-input:focus { border-color: rgba(94,226,181,0.4); }
-  .terminal-input::placeholder { color: var(--text-muted); }
-
-  /* Status bar */
-  .terminal-status {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: var(--space-1) var(--space-3);
-    background: rgba(255,255,255,0.02);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    font-size: 10px; color: var(--text-muted);
-  }
-  .terminal-status-left { display: flex; align-items: center; gap: var(--space-3); }
-  .terminal-status-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .status-connected { background: var(--brand-mint); }
-  .status-disconnected { background: var(--brand-red); }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .nav { flex-wrap: wrap; gap: var(--space-2); }
-    .tab-row { order: 3; width: 100%; overflow-x: auto; }
-    .terminal-quickbar { flex-direction: column; align-items: flex-start; }
-    .quick-sep { display: none; }
-  }
+  .hermes-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
 </style>
 </head>
 <body>
+<div id="terminal-container"></div>
 
-<div class="bg-orb"></div>
-<div class="bg-grid"></div>
-
-<nav class="nav">
-  <div class="brand">
-    <div class="brand-mark">
-      <div class="brand-ring"></div>
-      <div class="brand-inner"></div>
-      <div class="brand-dot"></div>
-    </div>
-    <span class="brand-name">Hermes AgentOS</span>
-  </div>
-  <div class="tab-row">
-    <button class="tab-btn" data-tab="overview">Overview</button>
-    <button class="tab-btn" data-tab="agents">Agents</button>
-    <button class="tab-btn" data-tab="tasks">Tasks</button>
-    <button class="tab-btn" data-tab="schedule">Schedule</button>
-    <button class="tab-btn" data-tab="content">Content</button>
-    <button class="tab-btn active" data-tab="terminal">Terminal</button>
-  </div>
-  <div class="nav-right">
-    <div class="status-pill"><div class="status-dot"></div><span>Live</span></div>
-  </div>
-</nav>
-
-<div class="main">
-  <!-- Placeholders -->
-  <div class="tab-panel" id="panel-overview">
-    <div class="glass-card"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-muted);gap:8px;"><div style="font-size:48px;opacity:.3">📊</div><div>Overview</div></div></div>
-  </div>
-  <div class="tab-panel" id="panel-agents">
-    <div class="glass-card"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-muted);gap:8px;"><div style="font-size:48px;opacity:.3">🤖</div><div>Agents</div></div></div>
-  </div>
-  <div class="tab-panel" id="panel-tasks">
-    <div class="glass-card"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-muted);gap:8px;"><div style="font-size:48px;opacity:.3">✅</div><div>Tasks</div></div></div>
-  </div>
-  <div class="tab-panel" id="panel-schedule">
-    <div class="glass-card"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-muted);gap:8px;"><div style="font-size:48px;opacity:.3">⏰</div><div>Schedule</div></div></div>
-  </div>
-  <div class="tab-panel" id="panel-content">
-    <div class="glass-card"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-muted);gap:8px;"><div style="font-size:48px;opacity:.3">📁</div><div>Content</div></div></div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════
-       TERMINAL TAB
-       ═══════════════════════════════════════════ -->
-  <div class="tab-panel active" id="panel-terminal">
-    <div class="terminal-header">
-      <div>
-        <div class="terminal-eyebrow">Mission Control</div>
-        <div class="terminal-title">Terminal</div>
-      </div>
-    </div>
-
-    <div class="terminal-layout">
-      <!-- Quick Actions -->
-      <div class="terminal-quickbar">
-        <span class="quick-label">Quick:</span>
-        <button class="quick-btn quick-btn-success" data-cmd="df -h && free -h && uptime">📊 System</button>
-        <button class="quick-btn quick-btn-success" data-cmd="ps aux | grep hermes | grep -v grep">🔍 Hermes Procs</button>
-        <div class="quick-sep"></div>
-        <button class="quick-btn quick-btn-brand" id="hermesChatBtn">💬 Hermes Chat</button>
-        <div class="quick-sep"></div>
-        <button class="quick-btn quick-btn-danger" data-cmd="clear">🧹 Clear</button>
-      </div>
-
-      <!-- Terminal -->
-      <div class="terminal-container">
-        <div class="terminal-tabs" id="terminalTabs">
-          <div class="terminal-tab active" data-tab-id="1">
-            <span>bash</span>
-            <span class="terminal-tab-close" data-close-tab="1">✕</span>
-          </div>
-          <div class="terminal-new-tab" id="newTerminalTab">+ New Tab</div>
-        </div>
-        <div class="terminal-xterm-wrap" id="terminalWrap">
-          <div class="terminal-exec" id="terminalExec">
-            <div class="terminal-output" id="terminalOutput"></div>
-            <div class="terminal-input-row">
-              <span class="terminal-prompt" id="terminalPrompt">jayant@ollama:~$</span>
-              <input type="text" class="terminal-input" id="terminalInput" placeholder="Type a command…" autocomplete="off" spellcheck="false">
-            </div>
-          </div>
-        </div>
-        <div class="terminal-status">
-          <div class="terminal-status-left">
-            <div class="terminal-status-dot status-connected" id="terminalStatusDot"></div>
-            <span id="terminalStatusText">Connected</span>
-            <span id="terminalCwd">/home/jayant</span>
-          </div>
-          <span>Enter to execute · 30s timeout</span>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="terminal-info" id="connStatus">
+  <span class="dot dot-online" id="connDot"></span>
+  <span id="connText">connecting…</span>
 </div>
 
+<div id="hermes-panel">
+  <div class="hermes-header">
+    <span style="color:#a78bfa;">⚡ Hermes Agent Session</span>
+    <div>
+      <button class="hermes-btn" id="hermesStart">Start</button>
+      <button class="hermes-btn" id="hermesClose" style="margin-left:4px;">Close</button>
+    </div>
+  </div>
+  <div class="hermes-log" id="hermesLog"></div>
+</div>
+
+<!-- xterm.js via CDN — only dependency -->
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
-  // Tab switching
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    });
+(function() {
+  const term = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    theme: {
+      background: '#0a0a1a',
+      foreground: '#e0e0e0',
+      cursor: '#00d4ff',
+      selection: 'rgba(0,212,255,0.2)',
+      black: '#1a1a2e',
+      red: '#ef4444',
+      green: '#10b981',
+      yellow: '#fbbf24',
+      blue: '#3b82f6',
+      magenta: '#a78bfa',
+      cyan: '#22d3d8',
+      white: '#e0e0e0',
+      brightBlack: '#4b5563',
+      brightRed: '#f87171',
+      brightGreen: '#34d399',
+      brightYellow: '#fcd34d',
+      brightBlue: '#60a5fa',
+      brightMagenta: '#c4b5fd',
+      brightCyan: '#67e8f9',
+      brightWhite: '#ffffff'
+    },
+    scrollback: 5000,
+    allowProposedApi: true
   });
 
-  // ═══════════════════════════════════════════
-  // TERMINAL TAB
-  // ═══════════════════════════════════════════
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
 
-  const isStandalone = location.protocol === 'file:';
-  let terminalHistory = [];
-  let historyIndex = -1;
-  let currentCwd = '/home/jayant';
-  let hermesMode = false;
-  let hermesSessionAlive = false;
+  const container = document.getElementById('terminal-container');
+  term.open(container);
+  fitAddon.fit();
 
-  const outputEl = document.getElementById('terminalOutput');
-  const inputEl = document.getElementById('terminalInput');
-  const promptEl = document.getElementById('terminalPrompt');
-  const cwdEl = document.getElementById('terminalCwd');
-  const statusDot = document.getElementById('terminalStatusDot');
-  const statusText = document.getElementById('terminalStatusText');
+  window.addEventListener('resize', () => fitAddon.fit());
 
-  function updatePrompt() {
-    const shortCwd = currentCwd.replace('/home/jayant', '~');
-    promptEl.textContent = `jayant@ollama:${shortCwd}$`;
-    cwdEl.textContent = currentCwd;
+  // State
+  let cwd = '/home/jayant';
+  let busy = false;
+  let cmdBuffer = '';
+  let cursorPos = 0;
+  let history = [];
+  let historyIdx = -1;
+
+  // Connect status
+  const connDot = document.getElementById('connDot');
+  const connText = document.getElementById('connText');
+  let hasFocus = false;
+
+  function setConnStatus(online) {
+    connDot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
+    connText.textContent = online ? 'online (' + cwd + ')' : 'offline';
   }
 
-  function appendOutput(text, type) {
-    const line = document.createElement('div');
-    line.className = 'output-line ' + (type || '');
-    line.textContent = text;
-    outputEl.appendChild(line);
-    outputEl.scrollTop = outputEl.scrollHeight;
+  // Initial prompt
+  function writePrompt() {
+    term.write('\r\x1b[0m\x1b[36m➜\x1b[0m \x1b[34m' + cwd + '\x1b[0m \x1b[32m$\x1b[0m ');
+    cmdBuffer = '';
+    cursorPos = 0;
   }
 
-  function executeCommand(cmd) {
-    if (!cmd.trim()) return;
+  writePrompt();
+  setConnStatus(true);
 
-    // Add to history
-    terminalHistory.push(cmd);
-    historyIndex = terminalHistory.length;
+  // Process a command
+  async function runCommand(raw) {
+    const cmd = raw.trim();
+    if (!cmd) { writePrompt(); return; }
 
-    // Hermes mode: route to Hermes session
-    if (hermesMode) {
-      if (cmd.trim() === '/exit') {
-        document.getElementById('hermesChatBtn').click();
-        return;
+    // Built-in: cd
+    if (cmd === 'cd' || cmd.startsWith('cd ')) {
+      const target = cmd.slice(2).trim() || '/home/jayant';
+      try {
+        const resp = await fetch('/api/terminal/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'cd ' + target + ' && pwd', cwd })
+        });
+        const data = await resp.json();
+        if (data.exit_code === 0) {
+          cwd = data.stdout.trim();
+          setConnStatus(true);
+        } else {
+          term.write('\r\n  \x1b[31m' + (data.stderr || 'no such directory') + '\x1b[0m');
+        }
+      } catch(e) {
+        term.write('\r\n  \x1b[31m' + e.message + '\x1b[0m');
       }
-      appendOutput(`hermes> ${cmd}`, 'output-cmd');
-      statusDot.className = 'terminal-status-dot status-disconnected';
-      statusText.textContent = 'Hermes thinking…';
+      writePrompt();
+      return;
+    }
 
-      fetch('/api/terminal/hermes/send', {
+    // Built-in: clear
+    if (cmd === 'clear') {
+      term.clear();
+      writePrompt();
+      return;
+    }
+
+    // Built-in: exit
+    if (cmd === 'exit') {
+      term.write('\r\n  \x1b[33m(embedded terminal — close tab to exit)\x1b[0m');
+      writePrompt();
+      return;
+    }
+
+    // Send to server
+    busy = true;
+    term.write('\r\n');
+    try {
+      const resp = await fetch('/api/terminal/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.output) appendOutput(data.output, 'output-success');
-        statusDot.className = 'terminal-status-dot status-connected';
-        statusText.textContent = 'Hermes Active';
-      })
-      .catch(err => {
-        appendOutput(`Error: ${err.message}`, 'output-err');
-        statusDot.className = 'terminal-status-dot status-disconnected';
-        statusText.textContent = 'Error';
+        body: JSON.stringify({ command: cmd, cwd })
       });
-      return;
-    }
+      const data = await resp.json();
 
-    // Normal shell mode: Display command
-    appendOutput(`$ ${cmd}`, 'output-cmd');
-
-    // Handle clear
-    if (cmd.trim() === 'clear') {
-      outputEl.innerHTML = '';
-      return;
-    }
-
-    // Handle cd
-    if (cmd.trim().startsWith('cd ')) {
-      const target = cmd.trim().slice(3).trim();
-      if (target === '~' || target === '') {
-        currentCwd = '/home/jayant';
-      } else if (target === '..') {
-        currentCwd = currentCwd.split('/').slice(0, -1).join('/') || '/';
-      } else if (target.startsWith('/')) {
-        currentCwd = target;
-      } else {
-        currentCwd = currentCwd + '/' + target;
+      if (data.stdout) term.write(data.stdout);
+      if (data.stderr) term.write('\x1b[31m' + data.stderr + '\x1b[0m');
+      if (data.exit_code !== 0 && data.exit_code !== undefined && !data.stdout && !data.stderr) {
+        term.write('  \x1b[33mexit: ' + data.exit_code + '\x1b[0m');
       }
-      updatePrompt();
-      return;
+    } catch(e) {
+      term.write('\r\n  \x1b[31m' + e.message + '\x1b[0m');
+      setConnStatus(false);
     }
-
-    if (isStandalone) {
-      appendOutput(`Demo mode — command not executed: ${cmd}`, 'output-err');
-      return;
-    }
-
-    // Execute via API
-    statusDot.className = 'terminal-status-dot status-disconnected';
-    statusText.textContent = 'Running…';
-
-    fetch('/api/terminal/exec', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd, cwd: currentCwd })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.stdout) appendOutput(data.stdout, 'output-success');
-      if (data.stderr) appendOutput(data.stderr, 'output-err');
-      if (data.exit_code !== undefined && data.exit_code !== 0) {
-        appendOutput(`[exit code: ${data.exit_code}]`, 'output-err');
-      }
-      statusDot.className = 'terminal-status-dot status-connected';
-      statusText.textContent = 'Connected';
-    })
-    .catch(err => {
-      appendOutput(`Error: ${err.message}`, 'output-err');
-      statusDot.className = 'terminal-status-dot status-disconnected';
-      statusText.textContent = 'Error';
-    });
+    busy = false;
+    writePrompt();
   }
 
-  // Input handler
-  inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const cmd = inputEl.value;
-      inputEl.value = '';
-      executeCommand(cmd);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        historyIndex--;
-        inputEl.value = terminalHistory[historyIndex] || '';
+  // Input handling
+  term.onData(data => {
+    if (busy) return;
+
+    const code = data.charCodeAt(0);
+
+    if (data === '\r') { // Enter
+      term.write('\r\n');
+      history.unshift(cmdBuffer);
+      if (history.length > 200) history.pop();
+      historyIdx = -1;
+      runCommand(cmdBuffer);
+      return;
+    }
+
+    if (data === '\x7f') { // Backspace
+      if (cursorPos > 0) {
+        cmdBuffer = cmdBuffer.slice(0, cursorPos - 1) + cmdBuffer.slice(cursorPos);
+        cursorPos--;
+        term.write('\x1b[1D\x1b[0K' + cmdBuffer.slice(cursorPos));
+        term.write('\x1b[' + (cmdBuffer.length - cursorPos) + 'D');
       }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIndex < terminalHistory.length - 1) {
-        historyIndex++;
-        inputEl.value = terminalHistory[historyIndex] || '';
+      return;
+    }
+
+    if (data === '\x1b[A') { // Up arrow
+      if (historyIdx < history.length - 1) {
+        historyIdx++;
+        cmdBuffer = history[historyIdx];
+        cursorPos = cmdBuffer.length;
+        term.write('\r\x1b[2K');
+        writePromptRaw();
+      }
+      return;
+    }
+
+    if (data === '\x1b[B') { // Down arrow
+      if (historyIdx > 0) {
+        historyIdx--;
+        cmdBuffer = history[historyIdx];
       } else {
-        historyIndex = terminalHistory.length;
-        inputEl.value = '';
+        historyIdx = -1;
+        cmdBuffer = '';
       }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      // Simple tab completion could be added here
+      cursorPos = cmdBuffer.length;
+      term.write('\r\x1b[2K');
+      writePromptRaw();
+      return;
+    }
+
+    if (data === '\x1b[C') { // Right arrow
+      if (cursorPos < cmdBuffer.length) {
+        cursorPos++;
+        term.write('\x1b[1C');
+      }
+      return;
+    }
+
+    if (data === '\x1b[D') { // Left arrow
+      if (cursorPos > 0) {
+        cursorPos--;
+        term.write('\x1b[1D');
+      }
+      return;
+    }
+
+    // Regular character
+    cmdBuffer = cmdBuffer.slice(0, cursorPos) + data + cmdBuffer.slice(cursorPos);
+    cursorPos++;
+    term.write('\x1b[0K' + cmdBuffer.slice(cursorPos - 1));
+    if (cursorPos < cmdBuffer.length) {
+      term.write('\x1b[' + (cmdBuffer.length - cursorPos) + 'D');
     }
   });
 
-  // Quick action buttons
-  document.querySelectorAll('.quick-btn[data-cmd]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const cmd = btn.dataset.cmd;
-      inputEl.value = cmd;
-      inputEl.focus();
-      executeCommand(cmd);
-    });
-  });
-
-  // ── Hermes Chat Mode ──
-  const hermesBtn = document.getElementById('hermesChatBtn');
-  hermesBtn.addEventListener('click', async () => {
-    if (!hermesMode) {
-      // Start Hermes session
-      hermesBtn.textContent = '⏳ Starting…';
-      hermesBtn.disabled = true;
-      try {
-        const resp = await fetch('/api/terminal/hermes/start', { method: 'POST' });
-        const data = await resp.json();
-        if (data.ok) {
-          hermesMode = true;
-          hermesSessionAlive = true;
-          hermesBtn.textContent = '🔴 Exit Hermes';
-          hermesBtn.classList.add('quick-btn-danger');
-          hermesBtn.classList.remove('quick-btn-brand');
-          promptEl.textContent = 'hermes>';
-          statusText.textContent = 'Hermes Active';
-          appendOutput('Hermes chat session started. Type your message and press Enter.', 'output-success');
-          appendOutput('Type /exit to quit Hermes mode.\n', '');
-        } else {
-          appendOutput(`Failed to start Hermes: ${data.message}`, 'output-err');
-          hermesBtn.textContent = '💬 Hermes Chat';
-        }
-      } catch (err) {
-        appendOutput(`Error: ${err.message}`, 'output-err');
-        hermesBtn.textContent = '💬 Hermes Chat';
-      }
-      hermesBtn.disabled = false;
-    } else {
-      // Exit Hermes mode
-      hermesMode = false;
-      hermesSessionAlive = false;
-      hermesBtn.textContent = '💬 Hermes Chat';
-      hermesBtn.classList.remove('quick-btn-danger');
-      hermesBtn.classList.add('quick-btn-brand');
-      updatePrompt();
-      statusText.textContent = 'Connected';
-      appendOutput('\nExited Hermes chat mode.', 'output-success');
-    }
-  });
-
-  // Focus input on click anywhere in terminal
-  document.getElementById('terminalExec').addEventListener('click', () => {
-    inputEl.focus();
-  });
-
-  // Initialize
-  updatePrompt();
-  if (!isStandalone) {
-    appendOutput('Hermes AgentOS Terminal v1.0', 'output-success');
-    appendOutput('Type commands directly or use Quick Actions above.', '');
-    appendOutput('', '');
-  } else {
-    appendOutput('Demo mode — connect to server for live terminal.', 'output-err');
+  function writePromptRaw() {
+    term.write('\x1b[36m➜\x1b[0m \x1b[34m' + cwd + '\x1b[0m \x1b[32m$\x1b[0m ' + cmdBuffer);
   }
+
+  // --- Hermes Agent Session Panel ---
+  const hermesPanel = document.getElementById('hermes-panel');
+  const hermesLog = document.getElementById('hermesLog');
+  const hermesStart = document.getElementById('hermesStart');
+  const hermesClose = document.getElementById('hermesClose');
+
+  hermesStart.addEventListener('click', async () => {
+    hermesPanel.classList.add('visible');
+    hermesLog.textContent = 'Starting Hermes session…\n';
+    try {
+      const resp = await fetch('/api/terminal/hermes/start', { method: 'POST' });
+      const data = await resp.json();
+      hermesLog.textContent += data.message + '\n';
+    } catch(e) {
+      hermesLog.textContent += 'Error: ' + e.message + '\n';
+    }
+  });
+
+  hermesClose.addEventListener('click', () => {
+    hermesPanel.classList.remove('visible');
+  });
+
+  // Draggable resize
+  window.addEventListener('resize', () => fitAddon.fit());
+
+})();
 </script>
 </body>
 </html>
