@@ -22,6 +22,8 @@
       if (_vendorLoaded[name]) return resolve();
       const tag = document.createElement('script');
       tag.src = src;
+      // ES modules (mjs) must be loaded with type="module"
+      if (src.endsWith('.mjs')) tag.type = 'module';
       tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
       tag.onerror = () => reject(new Error('Failed to load ' + name));
       document.head.appendChild(tag);
