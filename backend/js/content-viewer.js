@@ -15,25 +15,25 @@
   let _pdfRenderTask = null;
   let _xlsxBook = null;
   let _vendorLoaded = {};
-
-  // ── Vendor loading ─────────────────────────────────────
   function loadVendor(name, src) {
     return new Promise((resolve, reject) => {
-      if (_vendorLoaded[name]) return resolve();
+      if (_vendorLoaded[name]) { return resolve(); }
       if (src.endsWith('.mjs')) {
-        // Load ES module via <script type="module"> and then copy exports to window
-        // This avoids import.meta issues while giving us access to named exports
-        const tag = document.createElement('script');
-        tag.type = 'module';
-        tag.textContent = `import * as _mod from '${src}'; Object.assign(window, _mod);`;
-        tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
-        tag.onerror = () => reject(new Error('Failed to load ' + name));
-        document.head.appendChild(tag);
+        // Load ES module via dynamic import() from URL
+        import(src)
+          .then(mod => {
+            Object.assign(window, mod);
+            _vendorLoaded[name] = true;
+            resolve();
+          })
+          .catch(err => {
+            reject(new Error('Failed to load ' + name + ': ' + err.message));
+          });
       } else {
         const tag = document.createElement('script');
         tag.src = src;
         tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
-        tag.onerror = () => reject(new Error('Failed to load ' + name));
+        tag.onerror = () => { reject(new Error('Failed to load ' + name)); };
         document.head.appendChild(tag);
       }
     });
@@ -45,13 +45,16 @@
       loadVendor('pdfjsLib', '/vendor/pdfjs-dist/build/pdf.min.mjs'),
       loadVendor('XLSX', '/vendor/xlsx/dist/xlsx.full.min.js'),
     ]);
-    // Configure pdf.js to use fake worker mode (avoid CORS/cross-origin worker issues)
+    // Configure pdf.js worker
     if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-    }
-    // Also patch via the module's raw export if still present
-    if (window.GlobalWorkerOptions) {
-      window.GlobalWorkerOptions.workerSrc = '';
+      try {
+        const workerUrl = URL.createObjectURL(
+          new Blob([`import '${location.origin}/vendor/pdfjs-dist/build/pdf.worker.min.mjs';`], { type: 'text/javascript' })
+        );
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+      } catch(e) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs-dist/build/pdf.worker.min.mjs';
+      }
     }
   }
 
@@ -71,9 +74,24 @@
   // ── PDF Renderer ───────────────────────────────────────
   async function renderPDF(absPath, container) {
     await loadVendor('pdfjsLib', '/vendor/pdfjs-dist/build/pdf.min.mjs');
-    if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        '/vendor/pdfjs-dist/build/pdf.worker.min.mjs';
+    // Create a module worker from the .mjs worker file (avoids cross-origin issues)
+    if (window.pdfjsLib) {
+      try {
+        const workerUrl = URL.createObjectURL(
+          new Blob(
+            [`import '${location.origin}/vendor/pdfjs-dist/build/pdf.worker.min.mjs';`],
+            { type: 'text/javascript' }
+          )
+        );
+        if (window.pdfjsLib.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+        }
+      } catch(e) {
+        // Fallback: set workerSrc to the direct path
+        if (window.pdfjsLib.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs-dist/build/pdf.worker.min.mjs';
+        }
+      }
     }
 
     container.innerHTML = '<div class="doc-loading">Loading PDF…</div>';
@@ -130,10 +148,10 @@
         loading.style.display = 'none';
       }
 
-      $('#pdfPrev').addEventListener('click', () => { if (currentPage > 1) renderPage(currentPage - 1); });
-      $('#pdfNext').addEventListener('click', () => { if (currentPage < numPages) renderPage(currentPage + 1); });
-      $('#pdfIn').addEventListener('click', () => { currentScale = Math.min(3, currentScale + 0.25); renderPage(currentPage); });
-      $('#pdfOut').addEventListener('click', () => { currentScale = Math.max(0.5, currentScale - 0.25); renderPage(currentPage); });
+      document.getElementById('pdfPrev').addEventListener('click', () => { if (currentPage > 1) renderPage(currentPage - 1); });
+      document.getElementById('pdfNext').addEventListener('click', () => { if (currentPage < numPages) renderPage(currentPage + 1); });
+      document.getElementById('pdfIn').addEventListener('click', () => { currentScale = Math.min(3, currentScale + 0.25); renderPage(currentPage); });
+      document.getElementById('pdfOut').addEventListener('click', () => { currentScale = Math.max(0.5, currentScale - 0.25); renderPage(currentPage); });
 
       // Keyboard nav
       container.tabIndex = 0;
@@ -344,6 +362,92 @@
   }
 
   // ── Code / JSON with syntax highlighting ───────────────
+  function highlightCode(code, lang) {
+    // Use highlight.js if available
+    if (window.hljs && lang) {
+      try { return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch(e) {}
+    }
+    // Escape HTML first
+    let html = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Built-in lightweight tokenizer — single pass
+    const keywords = {
+      python: ['def','class','import','from','return','if','elif','else','for','while','try','except','finally','with','as','in','not','and','or','is','None','True','False','yield','lambda','pass','break','continue','raise','global','nonlocal','assert','del','print'],
+      javascript: ['function','const','let','var','return','if','else','for','while','do','switch','case','break','continue','try','catch','finally','throw','new','this','class','extends','super','import','export','default','async','await','true','false','null','undefined','typeof','instanceof','of','in','delete'],
+      typescript: ['function','const','let','var','return','if','else','for','while','do','switch','case','break','continue','try','catch','finally','throw','new','this','class','extends','super','import','export','default','async','await','true','false','null','undefined','interface','type','enum','implements','private','protected','public','readonly'],
+      bash: ['if','then','else','elif','fi','for','while','do','done','case','esac','function','return','echo','exit','set','unset','export','source','alias'],
+      sh: ['if','then','else','elif','fi','for','while','do','done','case','esac','function','return','echo','exit','set','unset','export','source','alias'],
+    };
+    const kwList = keywords[lang] || [];
+    // Tokenize: split into tokens (strings, comments, keywords, plain)
+    const tokens = [];
+    let i = 0;
+    while (i < html.length) {
+      // Check for comment
+      if (lang === 'python' && html[i] === '#') {
+        let end = html.indexOf('\n', i);
+        if (end === -1) end = html.length;
+        tokens.push({type:'comment', text: html.slice(i, end)});
+        i = end;
+        continue;
+      }
+      if ((lang === 'javascript' || lang === 'typescript') && html[i] === '/' && html[i+1] === '/') {
+        let end = html.indexOf('\n', i);
+        if (end === -1) end = html.length;
+        tokens.push({type:'comment', text: html.slice(i, end)});
+        i = end;
+        continue;
+      }
+      // Check for string
+      if (html[i] === '"' || html[i] === "'") {
+        const quote = html[i];
+        let j = i + 1;
+        while (j < html.length && html[j] !== quote) {
+          if (html[j] === '\\') j++; // skip escaped
+          j++;
+        }
+        if (j < html.length) j++; // include closing quote
+        tokens.push({type:'string', text: html.slice(i, j)});
+        i = j;
+        continue;
+      }
+      // Check for number
+      if (/\d/.test(html[i]) && (i === 0 || !/\w/.test(html[i-1]))) {
+        let j = i;
+        while (j < html.length && /[\d.]/.test(html[j])) j++;
+        tokens.push({type:'number', text: html.slice(i, j)});
+        i = j;
+        continue;
+      }
+      // Check for keyword
+      if (/[a-zA-Z_]/.test(html[i])) {
+        let j = i;
+        while (j < html.length && /[\w]/.test(html[j])) j++;
+        const word = html.slice(i, j);
+        if (kwList.includes(word)) {
+          tokens.push({type:'keyword', text: word});
+        } else if (j < html.length && html[j] === '(') {
+          tokens.push({type:'function', text: word});
+        } else {
+          tokens.push({type:'plain', text: word});
+        }
+        i = j;
+        continue;
+      }
+      // Plain character
+      tokens.push({type:'plain', text: html[i]});
+      i++;
+    }
+    // Build output
+    return tokens.map(t => {
+      if (t.type === 'comment') return '<span class="hljs-comment">' + t.text + '</span>';
+      if (t.type === 'string') return '<span class="hljs-string">' + t.text + '</span>';
+      if (t.type === 'number') return '<span class="hljs-number">' + t.text + '</span>';
+      if (t.type === 'keyword') return '<span class="hljs-keyword">' + t.text + '</span>';
+      if (t.type === 'function') return '<span class="hljs-function">' + t.text + '</span>';
+      return t.text;
+    }).join('');
+  }
+
   function renderCodeOrText(content, ext, container) {
     const langMap = {
       '.py': 'python', '.js': 'javascript', '.ts': 'typescript', '.jsx': 'jsx',
@@ -354,16 +458,7 @@
       '.swift': 'swift', '.kt': 'kotlin', '.md': 'markdown', '.toml': 'toml',
     };
     const lang = langMap[ext] || '';
-    let highlighted = content;
-    if (window.hljs && lang) {
-      try {
-        highlighted = window.hljs.highlight(content, { language: lang, ignoreIllegals: true }).value;
-      } catch (e) {
-        highlighted = escapeHtml(content);
-      }
-    } else {
-      highlighted = escapeHtml(content);
-    }
+    const highlighted = highlightCode(content, lang);
     const lines = content.split('\n');
     const lineNums = lines.map((_, i) => '<span class="code-line-num">' + (i + 1) + '</span>').join('');
 
@@ -389,6 +484,28 @@
     });
   }
 
+  // ── Markdown Renderer ──────────────────────────────────
+  function renderMarkdown(content, container) {
+    let html = content;
+    if (window.marked) {
+      try { html = window.marked.parse(content); } catch(e) { html = escapeHtml(content); }
+    } else {
+      // Minimal markdown fallback: headers, bold, italic, lists, code
+      html = escapeHtml(content);
+      html = html.replace(/^### (.+)/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)/gm, '<h1>$1</h1>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      html = html.replace(/^[-*] (.+)/gm, '<li>$1</li>');
+      html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1></code></pre>');
+      html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+      html = html.replace(/\n\n/g, '</p><p>');
+      html = '<p>' + html + '</p>';
+    }
+    container.innerHTML = '<div class="preview-md">' + html + '</div>';
+  }
+
   // ── Main dispatcher ────────────────────────────────────
   async function renderFile(absPath, fileData, container) {
     const ext = (absPath.match(/\.[a-zA-Z0-9]+$/) || [''])[0].toLowerCase();
@@ -411,18 +528,26 @@
       }
     } else if (ext === '.html' || ext === '.htm') {
       renderHTML(absPath, fileData, container);
+    } else if (ext === '.md') {
+      const text = fileData && fileData.content ? fileData.content : '';
+      renderMarkdown(text, container);
     } else if (['.py','.js','.ts','.jsx','.tsx','.sh','.bash','.css','.xml','.json',
       '.yaml','.yml','.sql','.env','.conf','.cfg','.ini','.toml','.rs','.go',
       '.rb','.php','.java','.c','.cpp','.cs','.swift','.kt','.lua','.pl','.ex'].includes(ext)) {
       const text = fileData && fileData.content ? fileData.content : '';
       renderCodeOrText(text, ext, container);
     } else {
-      container.innerHTML =
-        '<div class="preview-empty">' +
-          '<div class="preview-empty-icon">📄</div>' +
-          '<div>Preview not supported for ' + (ext || 'unknown') + ' files</div>' +
-          '<div style="margin-top:8px;font-size:var(--font-size-xs);">Use Download to open</div>' +
-        '</div>';
+      const text = fileData && fileData.content ? fileData.content : '';
+      if (text && text.length > 0) {
+        container.innerHTML = '<div class="preview-text">' + escapeHtml(text) + '</div>';
+      } else {
+        container.innerHTML =
+          '<div class="preview-empty">' +
+            '<div class="preview-empty-icon">📄</div>' +
+            '<div>Preview not supported for ' + (ext || 'unknown') + ' files</div>' +
+            '<div style="margin-top:8px;font-size:var(--font-size-xs);">Use Download to open</div>' +
+          '</div>';
+      }
     }
   }
 
@@ -441,8 +566,6 @@
       return s.includes(ext ? ext.toLowerCase() : '');
     }
   };
-
-  console.log('[CV] module loaded, isSupported(.docx)=', isSupported('.docx'), 'isSupported(.pdf)=', isSupported('.pdf'));
 
   // ── Init vendor loading early ──────────────────────────
   ensureAllVendors();

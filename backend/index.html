@@ -1510,6 +1510,12 @@
     border-radius: 50%; animation: spin 0.8s linear infinite;
   }
   .doc-error { padding: 24px; color: var(--brand-red); font-size: var(--font-size-sm); text-align: center; line-height: 1.6; }
+  /* Syntax highlighting (dark theme) */
+  .hljs-keyword { color: #ff7b72; font-weight: 600; }
+  .hljs-string { color: #a5d6ff; }
+  .hljs-comment { color: #8b949e; font-style: italic; }
+  .hljs-number { color: #79c0ff; }
+  .hljs-function { color: #d2a8ff; }
   @keyframes spin { to { transform: rotate(360deg); }
 </style>
 </head>
@@ -3036,11 +3042,12 @@
     document.getElementById('btnEdit').classList.remove('active');
 
     // Delegate rich rendering to ContentViewer module
-    console.log('[CV]', 'type=' + type, 'ext=' + ext, 'CV=' + (typeof window.ContentViewer), 'supported=' + (window.ContentViewer ? ContentViewer.isSupported(ext) : 'N/A'));
     if (window.ContentViewer && ContentViewer.isSupported(ext)) {
-      body.innerHTML = '';
+      body.innerHTML = '<div class="doc-loading" style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted)">Loading preview…</div>';
       const absPath = data.path || (currentDir + '/' + document.getElementById('previewTitle').textContent);
-      ContentViewer.render(absPath, data, body);
+      ContentViewer.render(absPath, data, body).catch(err => {
+        body.innerHTML = '<div class="doc-error">⚠ Render failed:<br>' + escapeHtml(err.message) + '</div>';
+      });
       return;
     }
 

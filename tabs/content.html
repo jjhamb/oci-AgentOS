@@ -860,7 +860,6 @@
     document.getElementById('btnEdit').classList.remove('active');
 
     // Delegate rich rendering to ContentViewer module
-    console.log('[CV]', 'type=' + type, 'ext=' + ext, 'CV=' + (typeof window.ContentViewer), 'supported=' + (window.ContentViewer ? ContentViewer.isSupported(ext) : 'N/A'));
     if (window.ContentViewer && ContentViewer.isSupported(ext)) {
       body.innerHTML = '';
       const absPath = data.path || (currentDir + '/' + document.getElementById('previewTitle').textContent);
