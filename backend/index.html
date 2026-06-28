@@ -1483,10 +1483,51 @@
   .xlsx-tab:hover { background: rgba(255,255,255,0.06); }
   .xlsx-tab.active { background: var(--brand-violet); color: #fff; }
   .xlsx-area { flex: 1; overflow: auto; }
-  .xlsx-area table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 12px; }
-  .xlsx-area td, .xlsx-area th { border: 1px solid rgba(255,255,255,0.08); padding: 4px 10px; white-space: nowrap; }
-  .xlsx-area th { background: rgba(139,92,246,0.1); color: var(--brand-violet); position: sticky; top: 0; font-weight: 600; }
-  .xlsx-area tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .xlsx-grid {
+    border-collapse: collapse;
+    font-family: var(--font-mono); font-size: 12px;
+    background: #0d1117;
+  }
+  .xlsx-grid thead { position: sticky; top: 0; z-index: 2; }
+  .xlsx-grid th {
+    background: #161b22;
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 6px 12px;
+    font-weight: 600;
+    color: var(--brand-violet);
+    text-align: center;
+    position: sticky; top: 0;
+  }
+  .xlsx-grid .xlsx-corner {
+    background: #161b22;
+    border: 1px solid rgba(255,255,255,0.1);
+    position: sticky; left: 0; top: 0; z-index: 3;
+    min-width: 40px; text-align: center;
+    color: var(--text-muted);
+  }
+  .xlsx-grid .xlsx-row-header {
+    background: #161b22;
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 4px 8px;
+    text-align: center;
+    color: var(--text-muted);
+    position: sticky; left: 0; z-index: 1;
+    font-size: 11px; min-width: 40px;
+  }
+  .xlsx-grid td {
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 4px 10px;
+    white-space: nowrap;
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .xlsx-grid .xlsx-num { text-align: right; color: #7dd3fc; font-variant-numeric: tabular-nums; }
+  .xlsx-grid .xlsx-text { text-align: left; color: #c9d1d9; }
+  .xlsx-grid .xlsx-bool { text-align: center; color: #fbbf24; }
+  .xlsx-grid .xlsx-date { text-align: center; color: #a78bfa; }
+  .xlsx-grid .xlsx-error { text-align: center; color: #f87171; font-style: italic; }
+  .xlsx-grid tr:hover td { background: rgba(139,92,246,0.05); }
+  .xlsx-grid tr:hover .xlsx-row-header { background: rgba(139,92,246,0.1); }
+  .xlsx-grid tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
   .image-viewer { height: 100%; display: flex; flex-direction: column; }
   .img-toolbar {
     display: flex; align-items: center; gap: 8px;

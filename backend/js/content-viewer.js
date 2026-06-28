@@ -218,8 +218,31 @@
         }
       );
 
+      // Extract document title from first heading or filename
+      const titleMatch = result.value.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
+      const docTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '') : '';
+
+      // Build a document-style page view
+      let metaHtml = '';
+      if (docTitle) {
+        metaHtml = '<div class="docx-meta"><div class="docx-title">' + docTitle + '</div>'
+          + '<div class="docx-source">' + absPath.split('/').pop() + '</div></div>';
+      }
+
       container.innerHTML =
-        '<div class="doc-viewer docx-rendered">' + result.value + '</div>';
+        '<div class="doc-viewer">' +
+        '<div class="docx-page">' +
+        metaHtml +
+        '<div class="docx-rendered">' + result.value + '</div>' +
+        '</div></div>';
+
+      // Handle mammoth messages (warnings about unsupported elements)
+      if (result.messages && result.messages.length > 0) {
+        const warnDiv = document.createElement('div');
+        warnDiv.className = 'docx-warnings';
+        warnDiv.innerHTML = '⚠ ' + result.messages.length + ' conversion note(s)';
+        container.querySelector('.docx-page').appendChild(warnDiv);
+      }
     } catch (e) {
       container.innerHTML =
         '<div class="doc-error">⚠ DOCX parse failed:<br>' + e.message + '</div>';
@@ -234,7 +257,6 @@
       _xlsxBook = book;
 
       container.innerHTML = '<div class="doc-loading">Building spreadsheet view…</div>';
-      const loading = container.querySelector('.doc-loading');
 
       const sheetNames = book.SheetNames;
 
@@ -251,10 +273,55 @@
       container.innerHTML = '';
       container.appendChild(wrapper);
 
+      function colLetter(n) {
+        let s = '';
+        while (n >= 0) { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; }
+        return s;
+      }
+
       function showSheet(idx) {
         const sn = sheetNames[idx];
         const ws = book.Sheets[sn];
-        const html = window.XLSX.utils.sheet_to_html(ws, { editable: false });
+        const range = window.XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        const totalRows = range.e.r + 1;
+        const totalCols = range.e.c + 1;
+
+        // Get column widths from sheet
+        const colWidths = (ws['!cols'] || []).map(c => c?.wch || 12);
+
+        // Build a proper spreadsheet grid
+        let html = '<table class="xlsx-grid" style="--total-cols:' + totalCols + '">';
+
+        // Column header row
+        html += '<thead><tr><th class="xlsx-corner">#</th>';
+        for (let c = 0; c < totalCols; c++) {
+          const w = colWidths[c] || 12;
+          html += '<th class="xlsx-col-header" style="min-width:' + (w * 8) + 'px">' + colLetter(c) + '</th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        // Data rows
+        for (let r = 0; r < totalRows; r++) {
+          html += '<tr>';
+          html += '<td class="xlsx-row-header">' + (r + 1) + '</td>';
+          for (let c = 0; c < totalCols; c++) {
+            const addr = window.XLSX.utils.encode_cell({ r, c });
+            const cell = ws[addr];
+            let val = '';
+            let cls = 'xlsx-cell';
+            if (cell) {
+              if (cell.t === 'n') { cls += ' xlsx-num'; val = cell.w !== undefined ? cell.w : cell.v; }
+              else if (cell.t === 'b') { cls += ' xlsx-bool'; val = cell.v ? 'TRUE' : 'FALSE'; }
+              else if (cell.t === 'd') { cls += ' xlsx-date'; val = cell.w || cell.v; }
+              else if (cell.t === 'e') { cls += ' xlsx-error'; val = '#ERR'; }
+              else { cls += ' xlsx-text'; val = cell.w !== undefined ? cell.w : (cell.v || ''); }
+            }
+            html += '<td class="' + cls + '">' + (val !== '' ? escapeHtml(String(val)) : '') + '</td>';
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+
         wrapper.querySelector('.xlsx-area').innerHTML = html;
         wrapper.querySelectorAll('.xlsx-tab').forEach((btn, bi) => {
           btn.classList.toggle('active', bi === idx);
@@ -268,7 +335,6 @@
       });
 
       showSheet(0);
-      loading.style.display = 'none';
     } catch (e) {
       container.innerHTML =
         '<div class="doc-error">⚠ XLSX parse failed:<br>' + e.message + '</div>';
