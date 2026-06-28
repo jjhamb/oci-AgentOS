@@ -20,13 +20,29 @@
   function loadVendor(name, src) {
     return new Promise((resolve, reject) => {
       if (_vendorLoaded[name]) return resolve();
-      const tag = document.createElement('script');
-      tag.src = src;
-      // ES modules (mjs) must be loaded with type="module"
-      if (src.endsWith('.mjs')) tag.type = 'module';
-      tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
-      tag.onerror = () => reject(new Error('Failed to load ' + name));
-      document.head.appendChild(tag);
+      if (src.endsWith('.mjs')) {
+        // Load ES module via Blob URL + dynamic import, then copy exports to window
+        fetch(src)
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+          .then(code => {
+            const blob = new Blob([code], { type: 'text/javascript' });
+            const url = URL.createObjectURL(blob);
+            return import(url).then(mod => {
+              URL.revokeObjectURL(url);
+              // Copy module exports to window for backward compatibility
+              if (mod.pdfjsLib) window.pdfjsLib = mod.pdfjsLib;
+              _vendorLoaded[name] = true;
+              resolve();
+            });
+          })
+          .catch(() => reject(new Error('Failed to load ' + name)));
+      } else {
+        const tag = document.createElement('script');
+        tag.src = src;
+        tag.onload = () => { _vendorLoaded[name] = true; resolve(); };
+        tag.onerror = () => reject(new Error('Failed to load ' + name));
+        document.head.appendChild(tag);
+      }
     });
   }
 
