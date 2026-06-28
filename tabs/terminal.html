@@ -67,6 +67,7 @@
     cursorBlink: true,
     fontSize: 13,
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    convertEol: true,
     theme: {
       background: '#0a0a1a',
       foreground: '#e0e0e0',
@@ -98,9 +99,17 @@
 
   const container = document.getElementById('terminal-container');
   term.open(container);
-  fitAddon.fit();
 
-  window.addEventListener('resize', () => fitAddon.fit());
+  // Expose for debugging
+  window.term = term;
+
+  function fitTerminal() {
+    fitAddon.fit();
+  }
+
+  fitTerminal();
+
+  window.addEventListener('resize', fitTerminal);
 
   // State
   let cwd = '/home/jayant';
