@@ -21,7 +21,7 @@
     return new Promise((resolve, reject) => {
       if (_vendorLoaded[name]) return resolve();
       if (src.endsWith('.mjs')) {
-        // Load ES module via Blob URL + dynamic import, then copy exports to window
+        // Load ES module via Blob URL + dynamic import (handles import.meta)
         fetch(src)
           .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
           .then(code => {
@@ -29,8 +29,22 @@
             const url = URL.createObjectURL(blob);
             return import(url).then(mod => {
               URL.revokeObjectURL(url);
-              // Copy module exports to window for backward compatibility
-              if (mod.pdfjsLib) window.pdfjsLib = mod.pdfjsLib;
+              // Build window.pdfjsLib from named exports (pdfjs v4 is pure ESM)
+              window.pdfjsLib = {
+                getDocument: mod.getDocument,
+                GlobalWorkerOptions: mod.GlobalWorkerOptions || {},
+                Util: mod.Util,
+                build: mod.build,
+                version: mod.version,
+                AbortException: mod.AbortException,
+                OPS: mod.OPS,
+                ImageKind: mod.ImageKind,
+                OutputScale: mod.OutputScale,
+                PasswordResponses: mod.PasswordResponses,
+                PermissionFlag: mod.PermissionFlag,
+                RenderingCancelledException: mod.RenderingCancelledException,
+                TextLayer: mod.TextLayer,
+              };
               _vendorLoaded[name] = true;
               resolve();
             });
