@@ -136,8 +136,8 @@
 <body>
 
 <h1>HERMES AGENTOS — UI Flow</h1>
-<p class="subtitle">Tile State Machine · Radar Synchronization · Tasks Panel</p>
-<p class="version">v2.1 · 2026-06-28 · Session 20260628_171943_456224bf</p>
+<p class="subtitle">Tile State Machine · Radar Synchronization · Tasks Panel · Discord Session Bridge</p>
+<p class="version">v2.2 · 2026-06-29 · Updated: orchestrator 5min, synthetic kanban tasks, Discord session bridge, removed ESCALATING state</p>
 
 <!-- ═══════════════════════════════════════════ -->
 <!-- 1. TILE STATES                            -->
@@ -158,7 +158,7 @@
   <td>None</td>
   <td>None</td>
   <td>Amber 50%</td>
-  <td>Specialist: &gt;2 min since last activity. Orchestrator: &gt;10 min since last activity.</td>
+  <td>Specialist: &gt;2 min since last activity. Orchestrator: &gt;5 min since last activity. &lt;5 min specialist activity or Discord session → tile stays Pulsating via synthetic task.</td>
 </tr>
 <tr>
   <td><span class="swatch" style="background: rgba(94,226,181,0.5);"></span><strong>Active</strong></td>
@@ -166,7 +166,7 @@
   <td>Solid mint, no pulse</td>
   <td>None</td>
   <td>Mint 80%</td>
-  <td>Task completed within last <strong>2 min</strong> (specialist) or <strong>10 min</strong> (orchestrator). Solid glow achievement — work is done.</td>
+  <td>Task completed within last <strong>2 min</strong> (specialist) or <strong>5 min</strong> (orchestrator). Solid glow achievement — work is done.</td>
 </tr>
 <tr>
   <td><span class="swatch" style="background: #5ee2b5;"></span><strong>Pulsating</strong></td>
@@ -174,15 +174,15 @@
   <td>Animated mint glow</td>
   <td>2s cycle @ gentle</td>
   <td>Mint pulsating 1.5s</td>
-  <td>Any kanban task NOT done (status = ready/running/blocked). <span class="reason reason-kanban">KANBAN_IN_FLIGHT</span></td>
+  <td>Any kanban task NOT done (status = ready/running/blocked) — <strong>including synthetic tasks created for active Discord sessions</strong>. <span class="reason reason-kanban">KANBAN_IN_FLIGHT</span></td>
 </tr>
-<tr class="blocked-row">
-  <td><span class="swatch" style="background: #ff5050;"></span><strong>Escalating</strong></td>
-  <td>Red 70%</td>
-  <td>Animated red glow</td>
-  <td>1s cycle @ fast</td>
-  <td>Red pulsating 0.75s</td>
-  <td>All pending tasks are <strong>blocked</strong>. Orchestrator must resolve or escalate to Capt Jhamb. <span class="reason reason-blocked">ALL_BLOCKED</span></td>
+<tr>
+  <td><span class="swatch" style="background: #a78bfa;"></span><strong>Orchestrator Pulsating</strong></td>
+  <td>Violet 50%</td>
+  <td>Animated violet glow</td>
+  <td>2s cycle @ gentle</td>
+  <td>Violet pulsating 1.5s</td>
+  <td>Any specialist tile pulsating, OR synthetic kanban task exists for any active specialist, OR default/infra task in flight. <span class="reason reason-pending">SYNTHETIC_OR_KANBAN</span></td>
 </tr>
 <tr>
   <td><span class="swatch" style="background: #444;"></span><strong>Dormant</strong></td>
@@ -194,7 +194,7 @@
 </tr>
 </tbody>
 </table>
-<p class="note">Pulsating and Escalating both animate the tile. Escalating is visually distinct: red color + faster 1s cycle vs 2s for normal pulse. This ensures the operator can distinguish "working on it" from "stuck, needs attention".</p>
+<p class="note"><strong>v2.2 change:</strong> Escalating state removed from specialist tiles. Orchestrator now uses 5-min Active window (was 10 min). Specialists can stay Pulsating via synthetic kanban tasks when their Discord session is active but no explicit kanban task exists.</p>
 </div>
 
 <h3>Live Preview</h3>
@@ -205,13 +205,13 @@
     <div class="status-label">IDLE</div>
   </div>
   <div class="tile-preview tile-active">
-    <div class="name">WRITER</div>
-    <div class="role">Content &amp; Copy</div>
+    <div class="name">CODER</div>
+    <div class="role">Development</div>
     <div class="status-label">ACTIVE</div>
   </div>
   <div class="tile-preview tile-pulsating">
-    <div class="name">CODER</div>
-    <div class="role">Development</div>
+    <div class="name">WRITER</div>
+    <div class="role">Content &amp; Copy</div>
     <div class="status-label">PULSATING</div>
   </div>
   <div class="tile-preview tile-orch-pulsating">
@@ -219,10 +219,10 @@
     <div class="role">Controller</div>
     <div class="status-label">PULSATING</div>
   </div>
-  <div class="tile-preview tile-escalating">
-    <div class="name">ORCHESTRATOR</div>
-    <div class="role">Controller</div>
-    <div class="status-label">ESCALATING</div>
+  <div class="tile-preview" style="border: 1px solid #67E8F9; background: rgba(103,232,249,0.06);">
+    <div class="name" style="color: #67E8F9;">WEB</div>
+    <div class="role">Web &amp; Deploy</div>
+    <div class="status-label" style="color: #67E8F9;">PULSATING</div>
   </div>
   <div class="tile-preview tile-dormant">
     <div class="name">REVIEWER</div>
@@ -242,7 +242,7 @@
 <div class="flow-container" style="margin: 24px 0;">
   <div class="flow-box flow-idle"><div class="label">IDLE</div><div class="time">∞ (no tasks)</div></div>
   <div class="flow-arrow">→</div>
-  <div class="flow-box flow-pulsating"><div class="label">PULSATING</div><div class="time">task received → done</div></div>
+  <div class="flow-box flow-pulsating"><div class="label">PULSATING</div><div class="time">task in flight OR Discord session active (synthetic task)</div></div>
   <div class="flow-arrow active">→</div>
   <div class="flow-box flow-active"><div class="label">ACTIVE</div><div class="time">2 min grace</div></div>
   <div class="flow-arrow">→</div>
@@ -271,42 +271,14 @@
 <div class="flow-container" style="margin: 24px 0;">
   <div class="flow-box flow-idle"><div class="label">IDLE</div><div class="time">∞</div></div>
   <div class="flow-arrow">→</div>
-  <div class="flow-box flow-orch" style="border-color: rgba(167,139,250,0.5);"><div class="label" style="color: #a78bfa;">PULSATING</div><div class="time">any task in flight</div></div>
+  <div class="flow-box flow-orch" style="border-color: rgba(167,139,250,0.5);"><div class="label" style="color: #a78bfa;">PULSATING</div><div class="time">any specialist pulsing OR synthetic task</div></div>
   <div class="flow-arrow active">→</div>
-  <div class="flow-box flow-active"><div class="label">ACTIVE</div><div class="time">10 min grace</div></div>
+  <div class="flow-box flow-active"><div class="label">ACTIVE</div><div class="time">5 min grace</div></div>
   <div class="flow-arrow">→</div>
   <div class="flow-box flow-idle"><div class="label">IDLE</div><div class="time">∞</div></div>
 </div>
 
-<div class="flow-container" style="margin: 24px 0;">
-  <div class="flow-box flow-pulsating"><div class="label">PULSATING</div><div class="time">(all pending tasks blocked)</div></div>
-  <div class="flow-arrow escalating">→</div>
-  <div class="flow-box flow-escalating"><div class="label">ESCALATING</div><div class="time">red pulse + banner + notification</div></div>
-  <div class="flow-arrow escalating">→</div>
-  <div class="flow-box flow-pulsating"><div class="label">PULSATING</div><div class="time">(unblocked)</div></div>
-</div>
 
-<table class="state-table">
-<thead><tr><th>Transition</th><th>Trigger</th><th>Duration</th><th>Signal Source</th></tr></thead>
-<tbody>
-<tr><td>Idle → Pulsating</td><td>Any specialist tile pulsating, OR non-done task exists for default/orchestrator/infra</td><td>Until all tasks done</td><td><code>kanban_specialist_active</code> non-empty OR <code>orch_pending_task = True</code> <span class="reason reason-pending">KANBAN_PENDING</span></td></tr>
-<tr><td>Pulsating → Escalating</td><td>ALL non-done tasks are <code>status = blocked</code></td><td>Until a task becomes ready/running, or all blocked tasks are unblocked/completed/archived</td><td><code>orch_all_blocked = True</code> AND <code>orch_pending_task = True</code> <span class="reason reason-blocked">ALL_BLOCKED</span></td></tr>
-<tr><td>Escalating → Pulsating</td><td>Any task transitions from blocked → ready/running</td><td>Immediate</td><td>Kanban task status change detected on next poll</td></tr>
-<tr><td>Pulsating → Active</td><td>All tasks done (no more in-flight)</td><td>10 minutes</td><td>No tasks match non-done criteria</td></tr>
-<tr><td>Active → Idle</td><td>10-minute timer expires with no new tasks</td><td>Permanent until new task</td><td><code>_orchestrator_last_active &gt; 600s</code> ago AND no kanban tasks exist</td></tr>
-</tbody>
-</table>
-
-<h3>Escalation Behavior</h3>
-<table class="state-table">
-<thead><tr><th>Channel</th><th>What happens</th><th>Once per episode?</th></tr></thead>
-<tbody>
-<tr><td>Orchestrator tile</td><td>Red pulse animation (1s cycle, border + glow + dot)</td><td>Yes — stays until unblocked</td></tr>
-<tr><td>Dashboard banner</td><td>Fixed red bar at top: "⚠ ESCALATING: All tasks blocked — Orchestrator reporting to Capt Jhamb"</td><td>Yes — shown until unblocked</td></tr>
-<tr><td>Browser notification</td><td><code>Notification()</code> API fires (requires user permission grant)</td><td>Yes — once per escalation episode</td></tr>
-<tr><td>Hermes agent (Orchestrator)</td><td>See API flag <code>orch_all_blocked = true</code> — can take further action via kanban tools</td><td>Continuous — polls every 8s</td></tr>
-</tbody>
-</table>
 </div>
 
 <!-- ═══════════════════════════════════════════ -->
@@ -379,13 +351,7 @@
   <td><strong>Pulsating</strong></td>
   <td><code>opacity</code> animation: 0.6 → 1.0 → 0.6, cycle 2.0–3.2s.</td>
   <td>Expanding ring if this agent is the <strong>most recently active</strong> agent (from activity log).</td>
-  <td>Agent tile is Pulsating (has in-flight kanban task).</td>
-</tr>
-<tr>
-  <td><strong>Escalating</strong></td>
-  <td>Center Orchestrator dot turns <strong>red</strong> with faster cycle.</td>
-  <td>Red expanding ring + red sweep indicator.</td>
-  <td>Only the Orchestrator center dot changes. Specialist dots remain in their normal state.</td>
+  <td>Agent tile is Pulsating (has in-flight kanban task OR synthetic task from Discord session).</td>
 </tr>
 </tbody>
 </table>
@@ -424,7 +390,7 @@
 <!-- ═══════════════════════════════════════════ -->
 <div class="section">
 <h2>5. Tasks Panel (Kanban)</h2>
-<p class="note">Read-only view of Hermes kanban.db. Refreshes every 10 seconds when panel is active. 6 columns.</p>
+<p class="note">Read-only view of Hermes kanban.db. Refreshes every 10 seconds when panel is active. 6 columns. <strong>v2.2:</strong> Server creates synthetic <code>running</code> tasks for agents with active Discord sessions but no explicit kanban task — ensures tiles show PULSATING even when no task was formally dispatched.</p>
 
 <h3>Kanban Columns</h3>
 <div class="panel">
@@ -476,13 +442,14 @@
 <table class="state-table">
 <thead><tr><th>Kanban state</th><th>Orchestrator tile</th><th>Assigned specialist tile</th></tr></thead>
 <tbody>
-<tr><td>Task created (any non-done status)</td><td><strong>Pulsating</strong> (orch_pending_task = True)</td><td><strong>Pulsating</strong> (specialist_active)</td></tr>
-<tr><td>Only non-done task is blocked</td><td><strong>Escalating</strong> (orch_all_blocked = True)</td><td><strong>Pulsating</strong> (still has non-done task)</td></tr>
+|<tr><td>Task created (any non-done status)</td><td><strong>Pulsating</strong> (orch_pending_task = True)</td><td><strong>Pulsating</strong> (specialist_active)</td></tr>
+<tr><td>Discord session active, NO kanban task</td><td><strong>Pulsating</strong> (synthetic task)</td><td><strong>Pulsating</strong> (synthetic task created)</td></tr>
+<tr><td>Only non-done task is blocked</td><td><strong>Pulsating</strong> (not escalating)</td><td><strong>Pulsating</strong> (still has non-done task)</td></tr>
 <tr><td>Task started → running</td><td><strong>Pulsating</strong> (specialist working)</td><td><strong>Pulsating</strong></td></tr>
-<tr><td>Task completed, 0 other tasks</td><td><strong>Active</strong> (10-min timer starts)</td><td><strong>Active</strong> (2-min grace)</td></tr>
+<tr><td>Task completed, 0 other tasks</td><td><strong>Active</strong> (5-min timer starts)</td><td><strong>Active</strong> (2-min grace)</td></tr>
 <tr><td>Task completed, 1 other task still running</td><td><strong>Pulsating</strong> (still have in-flight)</td><td><strong>Pulsating</strong></td></tr>
 <tr><td>Task archived</td><td>Treated as not existing.</td><td>Treated as not existing.</td></tr>
-<tr><td>All tasks done AND 10-min timer expired</td><td><strong>Idle</strong></td><td><strong>Idle</strong> (&gt;2 min since completion)</td></tr>
+<tr><td>All tasks done AND 5-min timer expired</td><td><strong>Idle</strong></td><td><strong>Idle</strong> (&gt;2 min since completion)</td></tr>
 </tbody>
 </table>
 </div>
@@ -517,8 +484,8 @@ ELSE:
 <pre class="sequence">1. Capt Jhamb sends request → Orchestrator receives via chat
 2. Orchestrator runs kanban_create() → task lands on kanban (assignee="default", status="ready")
    ├─ API detects non-done task → orch_pending_task = True
-   ├─ Orchestrator tile: IDLE → PULSATING (violet, fast 2s pulse)
-   ├─ Specialist tile: IDLE → PULSATING (if remapped)
+   ├─ Orchestrator tile: IDLE → PULSATING (violet, 2s pulse)
+   ├─ Specialist tile: IDLE → PULSATING (if remapped via _map_default_task_to_specialist)
    ├─ Radar: Center dot starts pulsing + specialist dot pulses
    └─ Tasks Panel: Card appears in READY column (amber border)
 
@@ -529,39 +496,22 @@ ELSE:
    └─ Tasks Panel: Card moves to RUNNING column (mint border)
 
 4. Worker completes → kanban_complete() → status="done"
-   ├─ Orchestrator tile: PULSATING → ACTIVE (solid glow, 10-min timer)
+   ├─ Orchestrator tile: PULSATING → ACTIVE (solid glow, 5-min timer)
    ├─ Specialist tile: PULSATING → ACTIVE (solid glow, 2-min timer)
    ├─ Radar: Specialist dot stops pulsing (no expanding ring)
    └─ Tasks Panel: Card moves to DONE column (gray border)
 
-5. 2 min later (specialist) / 10 min later (orchestrator)
+5. 2 min later (specialist) / 5 min later (orchestrator)
    ├─ Specialist tile: ACTIVE → IDLE
    ├─ Orchestrator tile: ACTIVE → IDLE (if no new tasks)
    └─ Radar: Center dot returns to static violet
-</pre>
-</div>
 
-<div class="panel">
-<h3>Blocked Path: Task Blocked</h3>
-<pre class="sequence">1. Task enters RUNNING → worker sets kanban_block(reason="...")
-   ├─ API detects all non-done tasks are blocked → orch_all_blocked = True
-   ├─ Orchestrator tile: PULSATING → ESCALATING (red, fast 1s pulse)
-   ├─ Specialist tile: PULSATATING continues (still has non-done task)
-   ├─ Radar: Center dot turns RED fast pulse (specialist dots unchanged)
-   ├─ Dashboard: Red sticky banner appears at top of page
-   ├─ Browser: Notification API fires (once per escalation episode)
-   └─ Tasks Panel: Card appears in BLOCKED column (red border)
-
-2. Orchestrator attempts kanban_unblock() OR creates new unblocking task
-   ├─ If unblock succeeds → task returns to RUNNING
-   ├─ orch_all_blocked recalculates → False (if any task now running/ready)
-   ├─ Orchestrator tile: ESCALATING → PULSATING (violet resumes)
-   ├─ Dashboard banner dismissed
-   └─ Browser notification cleared on next poll
-
-3. If Orchestrator cannot resolve → reports to Capt Jhamb via chat
-   ├─ State remains ESCALATING until Capt Jhamb intervenes
-   └─ Red pulse continues indefinitely (correct behavior—attention needed)
+6. Discord session active but NO kanban task exists
+   ├─ Server creates synthetic `running` task for the session's agent
+   ├─ Specialist tile: IDLE → PULSATING (via synthetic task)
+   ├─ Orchestrator tile: PULSATING (synthetic task detected)
+   ├─ Radar: Specialist dot pulses (opacity animation)
+   └─ Session ends → synthetic task removed → tiles return to normal cycle
 </pre>
 </div>
 </div>
@@ -575,14 +525,16 @@ ELSE:
 <table class="state-table">
 <thead><tr><th>Scenario</th><th>Orchestrator</th><th>Specialist</th><th>Note</th></tr></thead>
 <tbody>
-<tr><td>New task arrives during Active grace window</td><td>ACTIVE → PULSATING immediately</td><td>Applies to new assignee only</td><td>Active timer canceled, pulsation restarts.</td></tr>
-<tr><td>All tasks done, new task arrives 5 min later</td><td>ACTIVE → PULSATING (still in 10-min window)</td><td>PULSATING if assigned</td><td>No Idle gap visible.</td></tr>
+|<tr><td>New task arrives during Active grace window</td><td>ACTIVE → PULSATING immediately</td><td>Applies to new assignee only</td><td>Active timer canceled, pulsation restarts.</td></tr>
+<tr><td>All tasks done, new task arrives 5 min later</td><td>ACTIVE → PULSATING (still in 5-min window)</td><td>PULSATING if assigned</td><td>No Idle gap visible.</td></tr>
 <tr><td>Page reload</td><td>Back to IDLE momentarily, re-polls within 8s.</td><td>Same.</td><td>State is derived from DB, not browser memory.</td></tr>
-<tr><td>Server restart</td><td>All same — recalculated from kanban DB.</td><td>Same.</td><td>Stateless: server.py reads kanban.db each /api/agents call.</td></tr>
+<tr><td>Server restart</td><td>All same — recalculated from kanban DB + Discord session check.</td><td>Same.</td><td>Stateless: server.py reads kanban.db and agent_logs each /api/agents call.</td></tr>
 <tr><td>Discord activity + kanban task both present</td><td>Pulsating (either trigger is sufficient).</td><td>Pulsating.</td><td>OR logic — any signal triggers pulsation.</td></tr>
+<tr><td>Discord activity, NO kanban task</td><td>Pulsating (synthetic task created).</td><td>Pulsating (synthetic task).</td><td>Server creates synthetic `running` task for active Discord session.</td></tr>
 <tr><td>Task created then deleted (never started)</td><td>Brief PULSATING → back to IDLE or ACTIVE.</td><td>Never changed if task never picked up.</td><td>Deletion removes trigger.</td></tr>
 <tr><td>Multiple tasks across different agents</td><td>Pulsating until ALL done.</td><td>Each specialist independently tracks own tasks.</td><td>Orchestrator shows aggregate state.</td></tr>
-<tr><td>Mixed: 1 task running + 1 task blocked (others are not blocked)</td><td>Pulsating (orch_all_blocked = False)</td><td>Pulsating.</td><td>Escalating only when ALL non-done tasks are blocked.</td></tr>
+<tr><td>Mixed: 1 task running + 1 task blocked</td><td>Pulsating (not escalating)</td><td>Pulsating.</td><td>Escalating state removed — blocked tasks do not trigger escalation.</td></tr>
+<tr><td>Coder tile color</td><td>—</td><td><code>#67E8F9</code> (cyan-blue)</td><td>Distinct from Infra <code>#FBBF24</code> (amber) — visual separation.</td></tr>
 </tbody>
 </table>
 </div>
@@ -601,37 +553,30 @@ ELSE:
 │                                                                                        │
 │  SPECIALIST (Analyst/Writer/Marketer/Coder/Infra/Workers):                            │
 │                                                                                        │
-│    ┌────────�   non-done kanban task   ┌────────────┐   2min timer   ┌────────┐       │
+│    ┌────────┐   non-done kanban task   ┌────────────┐   2min timer   ┌────────┐       │
 │    │  IDLE  │ ──────────────────────→  │ PULSATING  │ ─────────────→ │ ACTIVE │       │
-│    │  (dim) │                          │ (2s pulse) │                │(solid) │       │
-│    └────────┘ ←──────────────────────  └────────────┘                └────────�       │
+│    │  (dim) │   OR Discord session     │ (2s pulse) │                │(solid) │       │
+│    └────────┘ ←──────────────────────  └────────────┘                └────────┘       │
 │                no non-done tasks                            timer expired               │
 │                                                                                        │
 │  ORCHESTRATOR:                                                                         │
 │                                                                                        │
-│    ┌────────�   any task in flight    ┌────────────┐   all blocked?   ┌────────────┐  │
-│    │  IDLE  │ ─────────────────────→  │ PULSATING  │ ──────────────→ │ ESCALATING │  │
-│    │  (dim) │                         │(violet 2s) │                  │ (red 1s)   │  │
-│    └────────┘ ←────────────────────   └────────────┘ ←────────────── └────────────�  │
-│                all tasks done                            unblocked        │             │
-│                         │                                    └──────────┘             │
-│                         │ 10min timer                                                   │
-│                         ↓                                                              │
-│                   ┌────────�                                                           │
-│                   │ ACTIVE │                                                           │
-│                   │(solid) │                                                           │
-│                   └────────┘                                                           │
+│    ┌────────┐   any task in flight    ┌────────────┐   5min timer    ┌────────┐       │
+│    │  IDLE  │ ─────────────────────→  │ PULSATING  │ ──────────────→ │ ACTIVE │       │
+│    │  (dim) │   OR specialist active   │(violet 2s) │                 │(solid) │       │
+│    └────────┘ ←────────────────────   └────────────┘                 └────────┘       │
+│                all tasks done                            timer expired               │
 │                                                                                        │
 │  RADAR SYNCHRONIZATION:                                                                │
 │    - All dots: pulse ONLY when tile is PULSATING                                       │
-│    - Center dot: reflects Orchestrator tile (violet or RED if escalating)              │
+│    - Center dot: reflects Orchestrator tile (violet when pulsating)                   │
 │    - Expanding ring: wraps most-recently-active specialist (from activity log)         │
-│    - Workers: always gentle pulse (independent of ESCALATING)                          │
+│    - Workers: always gentle pulse (independent of orchestrator state)                  │
 │                                                                                        │
-│  NOTIFICATION:                                                                         │
-│    - Browser API: fires once per escalation episode                                    │
-│    - Dashboard banner: persists until unblocked                                        │
-│    - Hermes agent: detects via /api/snapshot → orch_all_blocked = true                │
+│  DISCORD SESSION BRIDGE (v2.2):                                                        │
+│    - Active Discord session → synthetic kanban `running` task                          │
+│    - Ensures specialist tile shows PULSATING even without explicit kanban task         │
+│    - Session title keyword fallback (_map_default_task_to_specialist) for direct chats │
 │                                                                                        │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 </pre>
@@ -644,8 +589,8 @@ ELSE:
 <div class="legend">
   <div class="legend-item"><span class="swatch" style="background: #5ee2b5;"></span> Mint = Specialist Active / Pulsating</div>
   <div class="legend-item"><span class="swatch" style="background: #a78bfa;"></span> Violet = Orchestrator Active / Pulsating</div>
-  <div class="legend-item"><span class="swatch" style="background: #ff5050;"></span> Red = Escalating (Blocked)</div>
-  <div class="legend-item"><span class="swatch" style="background: #fbbf24;"></span> Amber = Idle / Waiting</div>
+  <div class="legend-item"><span class="swatch" style="background: #67E8F9;"></span> Cyan = Coder (distinct from Infra amber)</div>
+  <div class="legend-item"><span class="swatch" style="background: #fbbf24;"></span> Amber = Idle / Waiting / Infra</div>
   <div class="legend-item"><span class="swatch" style="background: #444;"></span> Gray = Dormant</div>
 </div>
 
