@@ -1984,7 +1984,7 @@
     infra: '#FBBF24',
     executor: '#5EE2B5',
     sentinel: '#F26D6D',
-    web: '#FBBF24',
+    web: '#67E8F9',
     publisher: '#8B5CF6',
     reviewer: '#6EE7B7',
   };
@@ -2069,28 +2069,45 @@
       activeAgentName = activityRecent[0].agent_name;
     }
 
-    // Orchestrator center dot (larger, pulsing)
+    // Helper: radar dot state from agent status
+    function radarState(agent) {
+      const s = agent.status || 'dormant';
+      if (s === 'pulsating' || s === 'escalating') return { opacity: 1.0, dur: '1.5s', ring: true };
+      if (s === 'active') return { opacity: 0.9, dur: '3s', ring: false };
+      if (s === 'idle') return { opacity: 0.45, dur: '0', ring: false };
+      return { opacity: 0.25, dur: '0', ring: false }; // dormant
+    }
+
+    // Orchestrator center dot (state-aware)
     const orch = agentMap['orchestrator'];
+    const orchState = radarState(orch);
+    const orchR = orchState.opacity > 0.5 ? 8 : 6;
     const orchDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     orchDot.setAttribute('cx', cx);
     orchDot.setAttribute('cy', cy);
-    orchDot.setAttribute('r', 8);
-    orchDot.setAttribute('fill', AGENT_COLORS['orchestrator']);
+    orchDot.setAttribute('r', orchR);
+    orchDot.setAttribute('fill', orch?.status === 'escalating' ? '#ff5050' : AGENT_COLORS['orchestrator']);
     orchDot.setAttribute('class', 'radar-dot');
-    orchDot.setAttribute('opacity', '0.9');
+    orchDot.setAttribute('opacity', orchState.opacity);
     orchDot.style.cursor = 'pointer';
-    orchDot.innerHTML = `<animate attributeName="r" values="7;9;7" dur="3s" repeatCount="indefinite"/>`;
+    if (orchState.dur !== '0') {
+      orchDot.innerHTML = `<animate attributeName="r" values="${orchR-1};${orchR+1};${orchR-1}" dur="${orchState.dur}" repeatCount="indefinite"/>`;
+    }
     svg.appendChild(orchDot);
     addTooltip(orchDot, orch);
 
-    // Flash active agent with expanding ring
-    if (activeAgentName && agentMap[activeAgentName]) {
+    // Expanding ring on orchestrator if any tile is pulsating
+    const anyPulsating = specialists.some(n => {
+      const s = agentMap[n]?.status;
+      return s === 'pulsating' || s === 'escalating';
+    }) || orch?.status === 'pulsating';
+    if (anyPulsating) {
       const activeDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       activeDot.setAttribute('cx', cx);
       activeDot.setAttribute('cy', cy);
       activeDot.setAttribute('r', 14);
       activeDot.setAttribute('fill', 'none');
-      activeDot.setAttribute('stroke', AGENT_COLORS[activeAgentName] || '#fff');
+      activeDot.setAttribute('stroke', AGENT_COLORS['orchestrator']);
       activeDot.setAttribute('stroke-width', '1');
       activeDot.setAttribute('opacity', '0.6');
       activeDot.innerHTML = `<animate attributeName="r" values="10;18;10" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite"/>`;
@@ -2122,28 +2139,45 @@
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
 
-      // Connection line to center
+      // Connection line to center (bright if agent is active/pulsating)
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', cx);
       line.setAttribute('y1', cy);
       line.setAttribute('x2', x);
       line.setAttribute('y2', y);
-      line.setAttribute('stroke', 'rgba(255,255,255,0.07)');
-      line.setAttribute('stroke-width', '0.5');
+      const isActiveLine = (a?.status === 'pulsating' || a?.status === 'escalating');
+      line.setAttribute('stroke', isActiveLine ? (AGENT_COLORS[name] + '55') : 'rgba(255,255,255,0.07)');
+      line.setAttribute('stroke-width', isActiveLine ? '1' : '0.5');
       line.setAttribute('class', 'radar-line');
       svg.appendChild(line);
 
-      // Dot
+      // Dot (state-aware opacity and pulse)
+      const aState = radarState(a);
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       dot.setAttribute('cx', x);
       dot.setAttribute('cy', y);
       dot.setAttribute('r', 5 + share * 2);
       dot.setAttribute('fill', AGENT_COLORS[name] || '#fff');
       dot.setAttribute('class', 'radar-dot');
-      dot.setAttribute('opacity', '0.85');
+      dot.setAttribute('opacity', aState.opacity);
       dot.style.cursor = 'pointer';
-      dot.innerHTML = `<animate attributeName="opacity" values="0.6;1;0.6" dur="${2 + i * 0.3}s" repeatCount="indefinite"/>`;
+      if (aState.dur !== '0') {
+        dot.innerHTML = `<animate attributeName="opacity" values="${aState.opacity * 0.6};${aState.opacity};${aState.opacity * 0.6}" dur="${aState.dur}" repeatCount="indefinite"/>`;
+      }
       svg.appendChild(dot);
+
+      // Expanding ring for pulsating agents
+      if (aState.ring) {
+        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ring.setAttribute('cx', x);
+        ring.setAttribute('cy', y);
+        ring.setAttribute('r', 5 + share * 2);
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', AGENT_COLORS[name] || '#fff');
+        ring.setAttribute('stroke-width', '0.8');
+        ring.innerHTML = `<animate attributeName="r" values="${5+share*2};${10+share*2};${5+share*2}" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite"/>`;
+        svg.appendChild(ring);
+      }
       addTooltip(dot, a);
 
       // Label (outside the dot)
@@ -2156,7 +2190,7 @@
       label.setAttribute('fill', AGENT_COLORS[name] || '#fff');
       label.setAttribute('font-size', '5');
       label.setAttribute('font-family', 'var(--font-mono)');
-      label.setAttribute('opacity', '0.8');
+      label.setAttribute('opacity', aState.opacity > 0.5 ? '0.8' : '0.4');
       label.setAttribute('class', 'radar-label');
       label.textContent = name.toUpperCase().slice(0, 4);
       svg.appendChild(label);
@@ -2195,20 +2229,23 @@
           wLine.setAttribute('class', 'radar-line');
           svg.appendChild(wLine);
 
-          // Worker dot
+          // Worker dot (state-aware)
+          const wState = radarState(wa);
           const wDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           wDot.setAttribute('cx', wx);
           wDot.setAttribute('cy', wy);
           wDot.setAttribute('r', 3 + wShare * 2);
           wDot.setAttribute('fill', AGENT_COLORS[wName] || '#fff');
           wDot.setAttribute('class', 'radar-dot');
-          wDot.setAttribute('opacity', '0.7');
+          wDot.setAttribute('opacity', wState.opacity * 0.8);
           wDot.style.cursor = 'pointer';
-          wDot.innerHTML = `<animate attributeName="opacity" values="0.4;0.8;0.4" dur="${2.5 + wi * 0.2}s" repeatCount="indefinite"/>`;
+          if (wState.dur !== '0') {
+            wDot.innerHTML = `<animate attributeName="opacity" values="${wState.opacity * 0.4};${wState.opacity * 0.8};${wState.opacity * 0.4}" dur="${wState.dur}" repeatCount="indefinite"/>`;
+          }
           svg.appendChild(wDot);
           addTooltip(wDot, wa);
 
-          // Worker label (tiny)
+          // Worker label (tiny, dimmer when idle)
           const wLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           wLabel.setAttribute('x', wx);
           wLabel.setAttribute('y', wy - 5);
@@ -2216,7 +2253,7 @@
           wLabel.setAttribute('fill', AGENT_COLORS[wName] || '#fff');
           wLabel.setAttribute('font-size', '3.5');
           wLabel.setAttribute('font-family', 'var(--font-mono)');
-          wLabel.setAttribute('opacity', '0.45');
+          wLabel.setAttribute('opacity', wState.opacity > 0.5 ? '0.45' : '0.2');
           wLabel.setAttribute('class', 'radar-label');
           wLabel.textContent = wName.toUpperCase().slice(0, 3);
           svg.appendChild(wLabel);
@@ -3215,6 +3252,15 @@
     // Fallback for formats not handled by ContentViewer
     if (type === 'image') {
       body.innerHTML = '<div class="preview-image"><img src="data:' + (data.mime || 'image/png') + ';base64,' + data.content + '" alt="' + escapeHtml(currentFile) + '"></div>';
+    } else if (ext === '.html' || ext === '.htm') {
+      // Render HTML files in a sandboxed iframe so they display as a page, not code
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'width:100%;height:100%;min-height:500px;border:none;background:#fff;border-radius:8px;';
+      iframe.sandbox = 'allow-same-origin allow-scripts allow-popups';
+      iframe.src = '/api/content/get?path=' + encodeURIComponent(data.path || currentFile);
+      body.innerHTML = '';
+      body.appendChild(iframe);
+      return;
     } else if (type === 'text' && ext === '.md') {
       if (typeof marked !== 'undefined') {
         const html = marked.parse(data.content);
