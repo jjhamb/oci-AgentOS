@@ -1673,20 +1673,21 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
 
         # Serve index.html
-        if path == "/" or path == "/index.html":
+        # Serve index.html — always inject unique content to bust cache
+        if path == "/" or path == "/index.html" or path.startswith("/?v="):
             html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
             try:
-                with open(html_path, "r") as f:
+                with open(html_path, "rb") as f:
                     html = f.read()
-                # Inject cache-busting version
-                html = html.replace("</title>", f'</title>\n<meta name="version" content="{os.urandom(4).hex()}">')
+                # Inject a unique comment to force content change (busts any cache)
+                html = html.replace(b"</head>", f"<!-- {os.urandom(4).hex()} --></head>".encode())
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("Expires", "0")
                 self.end_headers()
-                self.wfile.write(html.encode("utf-8"))
+                self.wfile.write(html)
             except FileNotFoundError:
                 self._send_json(404, {"error": "index.html not found"})
             return
