@@ -1678,10 +1678,13 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with open(html_path, "r") as f:
                     html = f.read()
+                # Inject cache-busting version
+                html = html.replace("</title>", f'</title>\n<meta name="version" content="{os.urandom(4).hex()}">')
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
                 self.end_headers()
                 self.wfile.write(html.encode("utf-8"))
             except FileNotFoundError:
