@@ -736,7 +736,7 @@ def _map_default_task_to_specialist(title, body):
         # Primary specialists (4)
         ("analyst", ["analyst", "research", "analysis", "market intel", "brief", "study", "trends"]),
         ("writer", ["writer", "blog", "content", "copy", "script", "article", "draft"]),
-        ("coder", ["coder", "debug", "deploy", "implement", "ec2", "apache", "ses", "bug", "fix", "error", "dashboard", "server", "code", "git", "commit"]),
+        ("coder", ["coder", "debug", "deploy", "implement", "ec2", "apache", "ses"]),
         ("marketer", ["marketer", "campaign", "promotion", "social media", "brand", "growth"]),
         # Infra workers (5) — specific keywords first
         ("infra", ["infra", "infrastructure", "server load", "uptime", "disk usage", "memory usage"]),
@@ -759,8 +759,14 @@ def _map_default_task_to_specialist(title, body):
 
 def agents_data():
     """Return status for all 11 agents based on agent-logs.db activity + kanban."""
-    # NOTE: Do NOT self-update orchestrator activity here. Orchestrator tile
-    # should reflect real work (kanban tasks, specialist activity), not polling.
+    global _orchestrator_last_active
+    # Update orchestrator activity — the dashboard is being polled, so the
+    # orchestrator (the operator viewing this dashboard) is engaged.
+    try:
+        with _orchestrator_lock:
+            _orchestrator_last_active = time.time()
+    except Exception:
+        pass
 
     try:
         conn = sqlite3.connect(AGENT_LOGS_DB)
@@ -810,123 +816,57 @@ def agents_data():
             sconn = sqlite3.connect(STATE_DB)
             sconn.row_factory = sqlite3.Row
             scur = sconn.cursor()
-            # Get Discord sessions with recent messages (within 5 min)
-            # Use message timestamps, not session started_at — catches active
-            # conversations that started more than 5 min ago.
-            # 5 min matches orchestrator idle timeout for consistent UX.
+            # Get recent Discord sessions (within 5 min)
             now_ts = time.time()
-            activity_window = now_ts - 300  # 5 minutes for messages
-            session_window = now_ts - 7200  # 2 hours for session start
+            five_min_ago = now_ts - 300
             scur.execute("""
-                SELECT s.id, s.source, s.started_at, s.message_count, s.title, s.user_id,
-                       MAX(m.timestamp) as last_msg_ts
-                FROM sessions s
-                JOIN messages m ON m.session_id = s.id
-                WHERE s.source = 'discord'
-                  AND m.timestamp > ?
-                  AND s.started_at > ?
-                GROUP BY s.id
-                ORDER BY last_msg_ts DESC
+                SELECT id, source, started_at, message_count, title, user_id
+                FROM sessions
+                WHERE source = 'discord'
+                  AND message_count > 0
+                  AND started_at > ?
+                ORDER BY started_at DESC
                 LIMIT 20
-            """, (activity_window, session_window))
+            """, (five_min_ago,))
             recent_discord_sessions = scur.fetchall()
-
-            # Bridge: correlate Discord sessions to agents via agent_logs timestamps.
-            # If agent X has a log entry within ±30 min of a Discord session's last
-            # message, that session belongs to agent X's channel.
+            
+            # Check if any recent Discord session matches an agent's channel
+            # Since we can't directly map session → channel, we use a heuristic:
+            # If there's a recent Discord session with activity, check if the
+            # session title or ID pattern matches known agent names
+            for r in recent_discord_sessions:
+                session_title = (r["title"] or "").lower()
+                for agent_name, channel_id in agent_discord_channels.items():
+                    if agent_name not in discord_session_active:
+                        if agent_name in session_title or channel_id in str(r["id"] or ""):
+                            discord_session_active[agent_name] = True
+            
+            # Also check: any Discord session with recent messages (within 5 min)
+            # This catches direct agent interactions even without title matching
             if recent_discord_sessions:
-                try:
-                    log_conn = sqlite3.connect(AGENT_LOGS_DB)
-                    log_cur = log_conn.cursor()
-                    for r in recent_discord_sessions:
-                        session_last_msg = r["last_msg_ts"]
-                        session_dt = datetime.fromtimestamp(session_last_msg, tz=timezone.utc)
-                        window_start = (session_dt - timedelta(minutes=30)).isoformat()
-                        window_end = (session_dt + timedelta(minutes=30)).isoformat()
-                        for agent_name in agent_discord_channels:
-                            if agent_name in discord_session_active:
-                                continue
-                            log_cur.execute("""
-                                SELECT COUNT(*) FROM agent_logs
-                                WHERE agent_name = ?
-                                  AND created_at > ?
-                                  AND created_at < ?
-                                LIMIT 1
-                            """, (agent_name, window_start, window_end))
-                            if log_cur.fetchone()[0] > 0:
-                                discord_session_active[agent_name] = True
-                    log_conn.close()
-                except Exception:
-                    pass
-
-            # Fallback: if agent_logs bridge didn't match, use session title keyword matching
-            if not discord_session_active and recent_discord_sessions:
+                # If there are recent Discord sessions, mark agents whose channels
+                # are in the active session list as potentially active
                 for r in recent_discord_sessions:
-                    session_title = (r["title"] or "").lower()
-                    mapped = _map_default_task_to_specialist(r["title"] or "", "")
-                    if mapped != "orchestrator":  # Only match specialists (not the catch-all)
-                        discord_session_active[mapped] = True
-                        break  # Only map the most recent session
-
+                    # Check messages in this session for recent activity
+                    scur.execute("""
+                        SELECT COUNT(*) as msg_count, MAX(timestamp) as last_msg
+                        FROM messages
+                        WHERE session_id = ?
+                          AND timestamp > ?
+                        LIMIT 1
+                    """, (r["id"], five_min_ago))
+                    msg_row = scur.fetchone()
+                    if msg_row and msg_row["msg_count"] > 0:
+                        # This session has recent messages — try to match to agent
+                        session_title = (r["title"] or "").lower()
+                        for agent_name, channel_id in agent_discord_channels.items():
+                            if agent_name not in discord_session_active:
+                                if agent_name in session_title:
+                                    discord_session_active[agent_name] = True
+            
             sconn.close()
         except Exception:
             pass  # state.db may not be accessible
-
-        # Create synthetic kanban tasks for active Discord sessions
-        # This ensures tiles pulsate even when agent doesn't create a kanban task itself
-        try:
-            synth_conn = sqlite3.connect(KANBAN_DB)
-            synth_cur = synth_conn.cursor()
-            now_ts = int(time.time())
-            active_agents = set(discord_session_active.keys()) if discord_session_active else set()
-
-            # Mark stale synthetic tasks as done if no longer active
-            if active_agents:
-                placeholders = ','.join('?' * len(active_agents))
-                synth_cur.execute(f"""
-                    UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ?
-                    WHERE session_id LIKE 'discord-%'
-                      AND status = 'running'
-                      AND assignee NOT IN ({placeholders})
-                """, [now_ts, now_ts] + list(active_agents))
-            else:
-                synth_cur.execute("""
-                    UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ?
-                    WHERE session_id LIKE 'discord-%'
-                      AND status = 'running'
-                """, (now_ts, now_ts))
-
-            # Create synthetic tasks for active Discord sessions
-            if discord_session_active:
-                for agent_name in discord_session_active:
-                    # Check if this agent already has a real running/ready task
-                    synth_cur.execute("""
-                        SELECT COUNT(*) FROM tasks
-                        WHERE assignee = ?
-                          AND status IN ('ready', 'running')
-                          AND session_id NOT LIKE 'discord-synth%'
-                        LIMIT 1
-                    """, (agent_name,))
-                    if synth_cur.fetchone()[0] == 0:
-                        session_title = f"Active conversation with {agent_name.capitalize()}"
-                        synth_cur.execute("""
-                            INSERT OR IGNORE INTO tasks
-                            (id, title, body, assignee, status, priority, created_at, started_at, updated_at, session_id)
-                            VALUES (?, ?, ?, ?, 'running', 5, ?, ?, ?, ?)
-                        """, (
-                            f"discord-synth-{agent_name}-{now_ts}",
-                            session_title,
-                            f"Auto-created: active Discord session for {agent_name}",
-                            agent_name,
-                            now_ts,
-                            now_ts,
-                            now_ts,
-                            f"discord-{agent_name}"
-                        ))
-            synth_conn.commit()
-            synth_conn.close()
-        except Exception:
-            pass
 
         # Check kanban for running tasks + task titles per agent
         kanban_running = {}
@@ -1103,19 +1043,27 @@ def agents_data():
                 if not orch_pulsating and orch_pending_task:
                     orch_pulsating = True
 
-                # Pulsating if any specialist is actively in Discord conversation
-                if not orch_pulsating:
-                    for spec_name in agent_discord_channels:
-                        if spec_name == "orchestrator":
-                            continue
-                        if discord_session_active.get(spec_name, False):
+                # Also pulsating if recent activity on default channels (<2min)
+                if not orch_pulsating and last_seen:
+                    try:
+                        last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                        if last_dt.tzinfo is None:
+                            last_dt = last_dt.replace(tzinfo=timezone.utc)
+                        age = datetime.now(timezone.utc) - last_dt
+                        if age < timedelta(minutes=2):
                             orch_pulsating = True
-                            break
+                    except Exception:
+                        pass
 
-                # If all pending tasks are blocked, override to "escalating" state
+                # Discord session activity also triggers pulsating
+                if not orch_pulsating and discord_session_active.get(name, False):
+                    orch_pulsating = True
+
+                # If all pending tasks are blocked, override to special "reporting" state
                 # The orchestrator is actively attempting to resolve OR report to Capt Jhamb
                 if orch_pulsating and orch_all_blocked:
-                    status = "escalating"
+                    status = "reporting"
+                    pulsating_agents.add(name)
                 elif orch_pulsating:
                     status = "pulsating"
                     pulsating_agents.add(name)
@@ -1158,13 +1106,23 @@ def agents_data():
                         if last_activity_ts and (last_dt is None or last_activity_ts > last_dt):
                             last_dt = last_activity_ts
 
-                        # Orchestrator: use real signals only (agent_logs or kanban).
-                        # No poll-driven activity — dashboard views don't count.
-                        # Cron job sessions explicitly excluded.
+                        # Orchestrator IS the dashboard operator — use server's own
+                        # activity timestamp (updated on every /api/agents SSE poll)
+                        # This is the most reliable signal that someone is actively
+                        # using the dashboard (and thus the orchestrator is engaged).
+                        try:
+                            with _orchestrator_lock:
+                                orch_age = time.time() - _orchestrator_last_active
+                            if orch_age < 600:  # 10 min window
+                                last_dt = datetime.fromtimestamp(
+                                    _orchestrator_last_active, tz=timezone.utc
+                                )
+                        except Exception:
+                            pass
 
                         if last_dt:
                             age = datetime.now(timezone.utc) - last_dt
-                            if age < timedelta(minutes=5):
+                            if age < timedelta(minutes=10):
                                 status = "active"
                             else:
                                 status = "idle"
@@ -1188,10 +1146,6 @@ def agents_data():
 
                 # Also check default-profile tasks remapped to this specialist
                 if not is_pulsating and name in kanban_specialist_active:
-                    is_pulsating = True
-
-                # Also pulsating if user is actively in Discord conversation with this agent
-                if not is_pulsating and discord_session_active.get(name, False):
                     is_pulsating = True
 
                 if is_pulsating:
@@ -1263,6 +1217,8 @@ def agents_data():
                         status = "active"
                     elif total == 0:
                         status = "dormant"
+                    elif discord_session_active.get(name, False):
+                        status = "active"
                     else:
                         status = "idle"
 
@@ -1292,12 +1248,9 @@ def agents_data():
             "agents": agents,
             "total": len(agents),
             "pulsating": sum(1 for a in agents if a["status"] == "pulsating"),
-            "escalating": sum(1 for a in agents if a["status"] == "escalating"),
             "active": sum(1 for a in agents if a["status"] == "active"),
             "idle": sum(1 for a in agents if a["status"] == "idle"),
             "dormant": sum(1 for a in agents if a["status"] == "dormant"),
-            "orch_pending_task": orch_pending_task,
-            "orch_all_blocked": orch_all_blocked,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -1898,9 +1851,8 @@ class Handler(BaseHTTPRequestHandler):
                 result['completed_24h'] = cur3.fetchone()[0]
                 cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-1 day')")
                 result['failed_24h'] = cur3.fetchone()[0]
-                # Messages 24h — sum of LLM conversation messages from sessions
-                cur2.execute("SELECT COALESCE(SUM(message_count), 0) FROM sessions WHERE started_at > ?", (day_ago,))
-                result['messages_24h'] = cur2.fetchone()[0]
+                cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-1 day')")
+                result['messages_24h'] = cur3.fetchone()[0]
                 conn3.close()
 
                 # Token totals 24h

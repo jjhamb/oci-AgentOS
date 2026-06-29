@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes AgentOS — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; padding: 40px; min-height: 100vh; }
+  h1 { text-align: center; color: #00d4ff; font-size: 24px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #555; font-size: 12px; margin-bottom: 6px; }
+  .last-updated { text-align: center; color: #444; font-size: 10px; margin-bottom: 32px; font-family: monospace; }
+
+  .hierarchy { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .node {
+    border: 2px solid;
+    border-radius: 12px;
+    padding: 14px 24px;
+    text-align: center;
+    min-width: 160px;
+    position: relative;
+  }
+  .node .name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+  .node .role { font-size: 10px; color: #777; margin-bottom: 4px; }
+  .node .meta { font-size: 10px; color: #555; font-family: monospace; }
+  .node .status { font-size: 10px; font-weight: 600; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .green { background: #10b981; }
+  .yellow { background: #f59e0b; }
+  .red { background: #ef4444; }
+  .gray { background: #6b7280; }
+
+  /* Orchestrator */
+  .orchestrator { border-color: #7c3aed; background: rgba(124, 58, 237, 0.1); }
+  .orchestrator .name { color: #a78bfa; }
+
+  /* Specialists */
+  .specialist { border-color: #0ea5e9; background: rgba(14, 165, 233, 0.06); }
+  .specialist .name { color: #38bdf8; }
+
+  /* Infra */
+  .infra { border-color: #f59e0b; background: rgba(245, 158, 11, 0.06); }
+  .infra .name { color: #fbbf24; }
+
+  /* Workers */
+  .worker { border-color: #4b5563; background: rgba(107, 114, 128, 0.05); }
+  .worker .name { color: #9ca3a0; font-size: 11px; }
+  .worker .role { font-size: 9px; }
+  .worker .status { font-size: 9px; }
+
+  .connector-v { width: 2px; height: 24px; margin: 0 auto; background: linear-gradient(to bottom, currentColor, currentColor); opacity: 0.3; }
+  .conn-purple { color: #7c3aed; }
+  .conn-cyan { color: #0ea5e9; }
+  .conn-gold { color: #f59e0b; }
+  .conn-gray { color: #4b5563; }
+
+  .children-row {
+    display: flex; gap: 20px; justify-content: center; align-items: flex-start;
+    flex-wrap: wrap; position: relative;
+  }
+  .child-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .section-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+    color: #444; margin-bottom: 10px; font-weight: 600;
+  }
+  .section-sublabel {
+    font-size: 9px; color: #333; margin-top: -6px; margin-bottom: 8px;
+    font-style: italic;
+  }
+
+  .legend { margin-top: 32px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #666; }
+
+  .rules {
+    margin-top: 32px; border: 1px solid #1e293b; border-radius: 12px;
+    padding: 20px 24px; background: rgba(255,255,255,0.02);
+  }
+  .rules h2 { font-size: 12px; color: #a78bfa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; }
+  .rules ul { list-style: none; }
+  .rules li { font-size: 12px; color: #8892a4; padding: 5px 0; border-bottom: 1px solid rgba(30, 41, 59, 0.5); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li strong { color: #cbd5e1; }
+  .rules li code { background: rgba(0,212,255,0.08); color: #00d4ff; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  .profile-badge {
+    display: inline-block; font-size: 8px; padding: 1px 5px;
+    border-radius: 4px; background: rgba(124, 58, 237, 0.15);
+    color: #a78bfa; font-weight: 600; vertical-align: middle; margin-left: 4px;
+  }
+
+  .stats-bar {
+    margin-top: 32px; border: 1px solid #1e293b; border-radius: 12px;
+    padding: 16px 24px; background: rgba(255,255,255,0.02);
+  }
+  .stats-bar h2 { font-size: 12px; color: #00d4ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+  .stat-item { text-align: center; }
+  .stat-item .value { font-size: 18px; font-weight: 700; color: #e2e8f0; }
+  .stat-item .label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<h1>HERMES AGENTOS — Architecture</h1>
+<p class="subtitle">Single Profile · One Gateway · Role-Based Dispatch</p>
+<p class="last-updated" id="lastUpdated">Snapshot: loading…</p>
+
+<div class="hierarchy">
+
+  <!-- Owner -->
+  <div class="node" style="border-color: #00d4ff; background: rgba(0,212,255,0.06); margin-bottom: 0;">
+    <div class="name" style="color: #00d4ff;">CAPT JHAMB</div>
+    <div class="role">Owner · Telegram / WhatsApp / Discord</div>
+    <div class="status"><span class="status-dot green"></span>Highest Authority</div>
+  </div>
+
+  <div class="connector-v conn-purple"></div>
+
+  <!-- Orchestrator -->
+  <div class="node orchestrator">
+    <div class="name">ORCHESTRATOR <span class="profile-badge">default</span></div>
+    <div class="role">Controller · Dispatch · Escalation</div>
+    <div class="meta" id="orchMeta">Gateway PID: — · Uptime: —</div>
+    <div class="status" id="orchStatus"><span class="status-dot green"></span>Active</div>
+  </div>
+
+  <div class="connector-v conn-cyan"></div>
+
+  <!-- Level 2: Specialists + Infra -->
+  <div class="children-row">
+
+    <!-- Specialists Column -->
+    <div class="child-col">
+      <div class="section-label">Specialists</div>
+      <div class="section-sublabel">via Orchestrator (kanban tasks)</div>
+
+      <div class="node specialist">
+        <div class="name">ANALYST <span class="profile-badge">default</span></div>
+        <div class="role">Research · Data · Intel</div>
+        <div class="meta" id="analystLogs">— logs</div>
+        <div class="status" id="analystStatus"><span class="status-dot yellow"></span>Idle</div>
+      </div>
+      <div class="connector-v conn-cyan" style="height:12px;"></div>
+      <div class="node specialist">
+        <div class="name">WRITER <span class="profile-badge">default</span></div>
+        <div class="role">Content · Bilingual · Docs</div>
+        <div class="meta" id="writerLogs">— logs</div>
+        <div class="status" id="writerStatus"><span class="status-dot yellow"></span>Idle</div>
+      </div>
+      <div class="connector-v conn-cyan" style="height:12px;"></div>
+      <div class="node specialist">
+        <div class="name">MARKETER <span class="profile-badge">default</span></div>
+        <div class="role">Strategy · Growth · Campaigns</div>
+        <div class="meta" id="marketerLogs">— logs</div>
+        <div class="status" id="marketerStatus"><span class="status-dot yellow"></span>Idle</div>
+      </div>
+      <div class="connector-v conn-cyan" style="height:12px;"></div>
+      <div class="node specialist">
+        <div class="name">CODER <span class="profile-badge">default</span></div>
+        <div class="role">Development · Debug · Automation</div>
+        <div class="meta" id="coderLogs">— logs</div>
+        <div class="status" id="coderStatus"><span class="status-dot gray"></span>Dormant</div>
+      </div>
+    </div>
+
+    <!-- Infra Column -->
+    <div class="child-col">
+      <div class="section-label">Infrastructure</div>
+      <div class="section-sublabel">Manages workers · Reports to Orchestrator</div>
+
+      <div class="node infra" style="margin-top: 10px;">
+        <div class="name">INFRA <span class="profile-badge" style="background:rgba(245,158,11,0.2);color:#fbbf24;">infra</span></div>
+        <div class="role">Servers · AWS/OCI · SSH</div>
+        <div class="meta" id="infraLogs">— logs</div>
+        <div class="status" id="infraStatus"><span class="status-dot yellow"></span>Idle</div>
+      </div>
+
+      <div class="connector-v conn-gold" style="height:16px;"></div>
+
+      <div class="children-row" style="gap: 10px;">
+        <div class="child-col">
+          <div class="node worker" style="min-width: 80px; padding: 8px 10px;">
+            <div class="name">EXE</div>
+            <div class="role">Runbooks</div>
+            <div class="status"><span class="status-dot green"></span>Idle</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 80px; padding: 8px 10px;">
+            <div class="name">SENT</div>
+            <div class="role">Monitor</div>
+            <div class="status"><span class="status-dot green"></span>Idle</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 80px; padding: 8px 10px;">
+            <div class="name">WEB</div>
+            <div class="role">SSL·Sites</div>
+            <div class="status"><span class="status-dot green"></span>Idle</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 80px; padding: 8px 10px;">
+            <div class="name">PUB</div>
+            <div class="role">Deploy</div>
+            <div class="status"><span class="status-dot green"></span>Idle</div>
+          </div>
+        </div>
+        <div class="child-col">
+          <div class="node worker" style="min-width: 80px; padding: 8px 10px;">
+            <div class="name">REV</div>
+            <div class="role">QA</div>
+            <div class="status"><span class="status-dot gray"></span>—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Live Stats Bar -->
+<div class="stats-bar">
+  <h2>Gateway Snapshot</h2>
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="value" id="statActiveAgents">—</div>
+      <div class="label">Active</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="statTotalSessions">—</div>
+      <div class="label">Sessions</div>
+    </div>
+    <div class="stat-item">
+      <div class="value" id="statModel">—</div>
+      <div class="label">Model</div>
+    </div>
+    <div class="stat-item">
+      <div class="value" id="statPlatform">—</div>
+      <div class="label">Platforms</div>
+    </div>
+    <div class="stat-item">
+      <div class="value" id="statUptime">—</div>
+      <div class="label">Uptime</div>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><span class="status-dot green"></span> Active / Idle</div>
+  <div class="legend-item"><span class="status-dot yellow"></span> Standby</div>
+  <div class="legend-item"><span class="status-dot red"></span> Alert</div>
+  <div class="legend-item"><span class="status-dot gray"></span> Dormant</div>
+  <div class="legend-item"><span class="profile-badge">default</span> Profile tag = kanban assignee</div>
+</div>
+
+<!-- Rules -->
+<div class="rules">
+  <h2>Operating Rules</h2>
+  <ul>
+    <li><strong>Single Profile:</strong> Only <code>default</code> exists. Orchestrator routes role-tagged tasks internally via kanban — no separate profiles.</li>
+    <li><strong>Role Tags:</strong> Analysts/Writer/Marketer/Coder = <code>[ROLE]</code> prefix in kanban title, assignee=<code>default</code>. Infra workers tagged <code>[INFRA]</code>.</li>
+    <li><strong>Shared Kanban DB:</strong> All tasks flow through one SQLite DB (<code>~/.hermes/kanban.db</code>). No filesystem channels, no separate gateways.</li>
+    <li><strong>One Gateway:</strong> Only <code>default</code> runs a Hermes gateway. Dispatcher polls every 60s, picks tasks with valid assignee.</li>
+    <li><strong>Infra:</strong> Manages 5 workers (Executor, Sentinel, Web, Publisher, Reviewer). Reports TO Orchestrator — not a peer.</li>
+    <li><strong>No Duplicates:</strong> Each specialist is ONE instance. Infra requests through Orchestrator — never spawns independently.</li>
+    <li><strong>Communication:</strong> Snapshot API (<code>/api/snapshot</code>) + kanban API (<code>/api/kanban</code>) = single source of truth for all dashboard data.</li>
+  </ul>
+</div>
+
+<script>
+async function loadSnapshot() {
+  try {
+    const resp = await fetch('/api/snapshot');
+    const data = await resp.json();
+    const now = new Date().toLocaleString();
+    document.getElementById('lastUpdated').textContent = 'Snapshot: ' + now + ' · Source: /api/snapshot';
+
+    // Gateway info
+    const gw = data.gateway || {};
+    document.getElementById('orchMeta').textContent =
+      `PID: ${gw.pid || '—'} · Gateway: ${gw.gateway_state || '—'}`;
+    document.getElementById('statModel').textContent = 'owl-alpha';
+
+    // Uptime
+    const up = gw.uptime_seconds || 0;
+    const hrs = Math.floor(up / 3600);
+    const mins = Math.floor((up % 3600) / 60);
+    document.getElementById('statUptime').textContent = hrs + 'h ' + mins + 'm';
+
+    // Platforms
+    const platforms = gw.platforms || {};
+    const connected = Object.values(platforms).filter(p => p.state === 'connected').length;
+    const total = Object.keys(platforms).length;
+    document.getElementById('statPlatform').textContent = `${connected}/${total} live`;
+
+    // Agents — API returns {agents: [...], total, pulsating, active, idle, dormant}
+    const agentsObj = data.agents || {};
+    const agentList = Array.isArray(agentsObj) ? agentsObj : (agentsObj.agents || []);
+    const agentsActive = agentsObj.active || 0;
+    document.getElementById('statActiveAgents').textContent = agentsActive;
+    let totalSessions = 0;
+    agentList.forEach(a => {
+      const name = (a.name || '').toLowerCase();
+      totalSessions += (a.total_logs || 0);
+      const logs = a.total_logs || 0;
+      const status = a.status || 'idle';
+      const dot = status === 'active' ? 'green' : (logs > 0 ? 'yellow' : 'gray');
+
+      const logsEl = document.getElementById(name + 'Logs');
+      const statusEl = document.getElementById(name + 'Status');
+      if (logsEl) logsEl.textContent = logs + ' sessions';
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="status-dot ${dot}"></span>${status.charAt(0).toUpperCase() + status.slice(1)}`;
+      }
+    });
+    document.getElementById('statTotalSessions').textContent = totalSessions;
+
+  } catch(e) {
+    document.getElementById('lastUpdated').textContent = 'Snapshot: OFFLINE — ' + e.message;
+  }
+}
+
+// Load immediately + refresh every 30s
+loadSnapshot();
+setInterval(loadSnapshot, 30000);
+</script>
+
+</body>
+</html>
