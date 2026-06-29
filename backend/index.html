@@ -2031,6 +2031,8 @@
   // Render radar — Orchestrator center, 5 specialists at 72° (Analyst, Writer, Marketer, Coder, Infra),
   // Infra has 5 workers sub-clustering around it. Hover tooltips for readability.
   function renderRadar(agents, activityRecent) {
+    const specialists = ['analyst', 'writer', 'marketer', 'coder', 'infra'];
+    const workers = ['executor', 'sentinel', 'web', 'publisher', 'reviewer'];
     const svg = document.getElementById('radarSvg');
     svg.querySelectorAll('.radar-dot, .radar-label, .radar-line, .radar-ring, .radar-tooltip').forEach(el => el.remove());
     if (!agents || !agents.length) return;
@@ -2117,9 +2119,7 @@
       svg.appendChild(activeDot);
     }
 
-    // Move declarations here (before first use) to avoid TDZ error
-    const specialists = ['analyst', 'writer', 'marketer', 'coder', 'infra'];
-    const workers = ['executor', 'sentinel', 'web', 'publisher', 'reviewer'];
+    // specialists + workers declared at top of function to avoid TDZ
 
     // Orchestrator label below
     const orchLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
