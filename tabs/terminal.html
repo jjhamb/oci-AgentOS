@@ -235,6 +235,20 @@
     theme: buildTheme('default'),
   });
 
+  // Force US keyboard layout — Oracle Cloud VMs may report wrong key maps
+  // AZERTY digits: &é"'(èç-_. → remap to 1234567890
+  const azertyToUs = { '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5', '-': '6', 'è': '7', '_': '8', 'ç': '9', 'à': '0' };
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && azertyToUs[e.key]) {
+      e.preventDefault();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(azertyToUs[e.key]);
+      }
+      return false;
+    }
+    return true;
+  });
+
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
 
