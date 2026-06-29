@@ -235,19 +235,42 @@
     theme: buildTheme('default'),
   });
 
-  // Force US keyboard layout — Oracle Cloud VMs may report wrong key maps
-  // AZERTY digits: &é"'(èç-_. → remap to 1234567890
-  const azertyToUs = { '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5', '-': '6', 'è': '7', '_': '8', 'ç': '9', 'à': '0' };
+  // ── DEBUG: visible key event overlay ──
+  const debugEl = document.createElement('div');
+  debugEl.id = 'keyDebug';
+  debugEl.style.cssText = 'position:fixed;top:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:4px;z-index:9999;max-width:260px;white-space:pre-wrap;line-height:1.5;border:1px solid #333';
+  debugEl.textContent = 'KEY DEBUG\npress any key...';
+  document.body.appendChild(debugEl);
+  const debugLog = [];
+  function debugLogPush(s) {
+    debugLog.push(s);
+    if (debugLog.length > 8) debugLog.shift();
+    debugEl.textContent = 'KEY DEBUG\n' + debugLog.join('\n');
+  }
+  window.addEventListener('keydown', (e) => {
+    debugLogPush(`key="${e.key}" code="${e.code}" shift=${e.shiftKey}`);
+  }, true);
+
+  // Force US keyboard layout — some cloud VMs report wrong key maps
+  // English-India digits should work, but just in case:
+  const keyRemap = { '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5', '-': '6', 'è': '7', '_': '8', 'ç': '9', 'à': '0' };
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type === 'keydown' && azertyToUs[e.key]) {
+    if (e.type === 'keydown' && keyRemap[e.key]) {
       e.preventDefault();
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(azertyToUs[e.key]);
+        ws.send(keyRemap[e.key]);
       }
       return false;
     }
     return true;
   });
+
+  // Auto-focus the terminal container so keyboard input works immediately
+  container.focus();
+  term.focus();
+
+  // Re-focus terminal when clicking anywhere in the wrapper
+  container.addEventListener('click', () => term.focus());
 
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
