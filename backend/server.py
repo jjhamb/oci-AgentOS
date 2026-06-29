@@ -736,7 +736,7 @@ def _map_default_task_to_specialist(title, body):
         # Primary specialists (4)
         ("analyst", ["analyst", "research", "analysis", "market intel", "brief", "study", "trends"]),
         ("writer", ["writer", "blog", "content", "copy", "script", "article", "draft"]),
-        ("coder", ["coder", "debug", "deploy", "implement", "ec2", "apache", "ses"]),
+        ("coder", ["coder", "debug", "deploy", "implement", "ec2", "apache", "ses", "bug", "fix", "error", "dashboard", "server", "code", "git", "commit"]),
         ("marketer", ["marketer", "campaign", "promotion", "social media", "brand", "growth"]),
         # Infra workers (5) — specific keywords first
         ("infra", ["infra", "infrastructure", "server load", "uptime", "disk usage", "memory usage"]),
@@ -810,12 +810,12 @@ def agents_data():
             sconn = sqlite3.connect(STATE_DB)
             sconn.row_factory = sqlite3.Row
             scur = sconn.cursor()
-            # Get Discord sessions with recent messages (within 5 min)
+            # Get Discord sessions with recent messages (within 15 min)
             # Use message timestamps, not session started_at — catches active
             # conversations that started more than 5 min ago.
             now_ts = time.time()
-            five_min_ago = now_ts - 300
-            thirty_min_ago = now_ts - 1800
+            activity_window = now_ts - 1800  # 30 minutes for messages
+            session_window = now_ts - 7200  # 2 hours for session start
             scur.execute("""
                 SELECT s.id, s.source, s.started_at, s.message_count, s.title, s.user_id,
                        MAX(m.timestamp) as last_msg_ts
@@ -823,10 +823,11 @@ def agents_data():
                 JOIN messages m ON m.session_id = s.id
                 WHERE s.source = 'discord'
                   AND m.timestamp > ?
+                  AND s.started_at > ?
                 GROUP BY s.id
                 ORDER BY last_msg_ts DESC
                 LIMIT 20
-            """, (five_min_ago,))
+            """, (activity_window, session_window))
             recent_discord_sessions = scur.fetchall()
 
             # Bridge: correlate Discord sessions to agents via agent_logs timestamps.
@@ -857,9 +858,74 @@ def agents_data():
                 except Exception:
                     pass
 
+            # Fallback: if agent_logs bridge didn't match, use session title keyword matching
+            if not discord_session_active and recent_discord_sessions:
+                for r in recent_discord_sessions:
+                    session_title = (r["title"] or "").lower()
+                    mapped = _map_default_task_to_specialist(r["title"] or "", "")
+                    if mapped != "orchestrator":  # Only match specialists (not the catch-all)
+                        discord_session_active[mapped] = True
+                        break  # Only map the most recent session
+
             sconn.close()
         except Exception:
             pass  # state.db may not be accessible
+
+        # Create synthetic kanban tasks for active Discord sessions
+        # This ensures tiles pulsate even when agent doesn't create a kanban task itself
+        try:
+            synth_conn = sqlite3.connect(KANBAN_DB)
+            synth_cur = synth_conn.cursor()
+            now_ts = int(time.time())
+            active_agents = set(discord_session_active.keys()) if discord_session_active else set()
+
+            # Mark stale synthetic tasks as done if no longer active
+            if active_agents:
+                placeholders = ','.join('?' * len(active_agents))
+                synth_cur.execute(f"""
+                    UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ?
+                    WHERE session_id LIKE 'discord-%'
+                      AND status = 'running'
+                      AND assignee NOT IN ({placeholders})
+                """, [now_ts, now_ts] + list(active_agents))
+            else:
+                synth_cur.execute("""
+                    UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ?
+                    WHERE session_id LIKE 'discord-%'
+                      AND status = 'running'
+                """, (now_ts, now_ts))
+
+            # Create synthetic tasks for active Discord sessions
+            if discord_session_active:
+                for agent_name in discord_session_active:
+                    # Check if this agent already has a real running/ready task
+                    synth_cur.execute("""
+                        SELECT COUNT(*) FROM tasks
+                        WHERE assignee = ?
+                          AND status IN ('ready', 'running')
+                          AND session_id NOT LIKE 'discord-synth%'
+                        LIMIT 1
+                    """, (agent_name,))
+                    if synth_cur.fetchone()[0] == 0:
+                        session_title = f"Active conversation with {agent_name.capitalize()}"
+                        synth_cur.execute("""
+                            INSERT OR IGNORE INTO tasks
+                            (id, title, body, assignee, status, priority, created_at, started_at, updated_at, session_id)
+                            VALUES (?, ?, ?, ?, 'running', 5, ?, ?, ?, ?)
+                        """, (
+                            f"discord-synth-{agent_name}-{now_ts}",
+                            session_title,
+                            f"Auto-created: active Discord session for {agent_name}",
+                            agent_name,
+                            now_ts,
+                            now_ts,
+                            now_ts,
+                            f"discord-{agent_name}"
+                        ))
+            synth_conn.commit()
+            synth_conn.close()
+        except Exception:
+            pass
 
         # Check kanban for running tasks + task titles per agent
         kanban_running = {}
