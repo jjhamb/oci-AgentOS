@@ -811,12 +811,12 @@ def agents_data():
             sconn.row_factory = sqlite3.Row
             scur = sconn.cursor()
             # Get Discord sessions with recent messages (within 5 min)
-            # Use message timestamps, not session started_at — catches active
-            # conversations that started more than 5 min ago.
+            # Use message timestamps, NOT session started_at — catches active
+            # conversations that started more than 5 min ago (long sessions
+            # like architecture reviews that span hours).
             # 5 min matches orchestrator idle timeout for consistent UX.
             now_ts = time.time()
-            activity_window = now_ts - 300  # 5 minutes for messages
-            session_window = now_ts - 7200  # 2 hours for session start
+            activity_window = now_ts - 1800  # 30 minutes for messages — natural pauses during conversation shouldn't drop active state
             scur.execute("""
                 SELECT s.id, s.source, s.started_at, s.message_count, s.title, s.user_id,
                        MAX(m.timestamp) as last_msg_ts
@@ -824,11 +824,10 @@ def agents_data():
                 JOIN messages m ON m.session_id = s.id
                 WHERE s.source = 'discord'
                   AND m.timestamp > ?
-                  AND s.started_at > ?
                 GROUP BY s.id
                 ORDER BY last_msg_ts DESC
                 LIMIT 20
-            """, (activity_window, session_window))
+            """, (activity_window,))
             recent_discord_sessions = scur.fetchall()
 
             # Bridge: correlate Discord sessions to agents via agent_logs timestamps.
