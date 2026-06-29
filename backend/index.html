@@ -814,7 +814,7 @@
   /* Stats Strip */
   .stats-strip {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: var(--space-3);
     margin-top: var(--space-5);
   }
@@ -987,10 +987,10 @@
   @media (max-width: 1024px) {
     .overview-grid { grid-template-columns: 1fr; }
     .overview-bottom { grid-template-columns: 1fr; }
-    .stats-strip { grid-template-columns: repeat(3, 1fr); }
+    .stats-strip { grid-template-columns: repeat(4, 1fr); }
     .stat-card { padding: var(--space-2); }
   }
-  @media (max-width: 600px) {
+  @media (max-width: 700px) {
     .stats-strip { grid-template-columns: repeat(2, 1fr); }
     .footer-strip { grid-template-columns: repeat(3, 1fr); }
   }
@@ -1782,6 +1782,11 @@
         <div class="stat-label">API Cost (24h)</div>
         <div class="stat-value" style="color:var(--brand-mint)" id="statCost">—</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">Quota (UTC)</div>
+        <div class="stat-value" style="color:var(--brand-amber);font-size:var(--font-size-lg)" id="statQuota">—</div>
+        <div class="stat-sub" id="statQuotaSub">—</div>
+      </div>
     </div>
 
     <!-- BOTTOM: Throughput + Activity -->
@@ -2444,9 +2449,29 @@
         }
         if (quotaText) {
           const used = data.calls_today ?? 0;
-          const total = data.total_quota ?? 0;
+          const total = 2000;
           const hrs = data.hours_until_reset;
           quotaText.textContent = `${used} / ${total}` + (hrs != null ? ` · resets in ${Math.floor(hrs)}h ${Math.round((hrs % 1) * 60)}m` : '');
+        }
+        // Quota stat card — used / remaining since 0000 UTC
+        const statQuota = document.getElementById('statQuota');
+        const statQuotaSub = document.getElementById('statQuotaSub');
+        if (statQuota) {
+          const qUsed = data.calls_today ?? 0;
+          const qTotal = 2000;
+          const qRem = qTotal - qUsed;
+          statQuota.textContent = `${qUsed} / ${qRem}`;
+          if (qUsed > 1800) statQuota.style.color = 'var(--brand-red)';
+          else if (qUsed > 1400) statQuota.style.color = 'var(--brand-amber)';
+          else statQuota.style.color = 'var(--brand-mint)';
+        }
+        if (statQuotaSub) {
+          const hrs = data.hours_until_reset;
+          if (hrs != null) {
+            statQuotaSub.textContent = `resets in ${Math.floor(hrs)}h ${Math.round((hrs % 1) * 60)}m`;
+          } else {
+            statQuotaSub.textContent = 'daily quota';
+          }
         }
         if (dot) {
           const status = data.active_key ? data.active_key.status : 'unknown';
