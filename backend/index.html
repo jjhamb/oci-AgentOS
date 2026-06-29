@@ -1168,10 +1168,31 @@
     box-shadow: 0 0 12px var(--tile-glow, rgba(94,226,181,0.35)), 0 0 36px var(--tile-glow, rgba(94,226,181,0.12)), inset 0 1px 0 rgba(255,255,255,0.05);
     animation: glow-pulse-active 2s ease-in-out infinite;
   }
-  .agents-orch-col .agent-tile.status-pulsating {
+  .agents-orch-col .agentulsating {
     border-color: var(--tile-accent, rgba(167,139,250,0.5));
     box-shadow: 0 0 12px var(--tile-glow, rgba(167,139,250,0.35)), 0 0 36px var(--tile-glow, rgba(167,139,250,0.12)), inset 0 1px 0 rgba(255,255,255,0.05);
     animation: glow-pulse-orch 2s ease-in-out infinite;
+  }
+  /* Escalating = all tasks blocked, reporting to Capt Jhamb — fast red pulse */
+  .agents-orch-col .agent-tile.status-escalating {
+    border-color: rgba(255,80,80,0.7);
+    box-shadow: 0 0 16px rgba(255,80,80,0.45), 0 0 40px rgba(255,80,80,0.2), inset 0 1px 0 rgba(255,80,80,0.08);
+    animation: glow-pulse-escalating 1s ease-in-out infinite;
+  }
+  .agent-tile.status-escalating {
+    border-color: rgba(255,80,80,0.6);
+    box-shadow: 0 0 12px rgba(255,80,80,0.4), 0 0 36px rgba(255,80,80,0.15), inset 0 1px 0 rgba(255,80,80,0.08);
+    animation: glow-pulse-escalating 1s ease-in-out infinite;
+  }
+  @keyframes glow-pulse-escalating {
+    0%, 100% {
+      border-color: rgba(255,80,80,0.5);
+      box-shadow: 0 0 12px rgba(255,80,80,0.3), 0 0 30px rgba(255,80,80,0.1), inset 0 1px 0 rgba(255,80,80,0.06);
+    }
+    50% {
+      border-color: rgba(255,80,80,0.9);
+      box-shadow: 0 0 24px rgba(255,80,80,0.6), 0 0 60px rgba(255,80,80,0.25), inset 0 1px 0 rgba(255,80,80,0.12);
+    }
   }
   /* Status glow: active = colored pulse, idle = steady dim, dormant = grey flat */
   .agent-tile.status-active {
@@ -1233,6 +1254,7 @@
     width: 7px; height: 7px; border-radius: 50%;
   }
   .agent-tile-status-dot.pulsating { background: var(--brand-mint); animation: pulse-dot 1.5s ease-in-out infinite; }
+  .agent-tile-status-dot.escalating { background: #ff5050; animation: pulse-dot 0.75s ease-in-out infinite; }
   .agent-tile-status-dot.active { background: var(--brand-mint); opacity: 0.8; }
   .agent-tile-status-dot.waiting { background: var(--brand-amber); animation: pulse-dot 3s ease-in-out infinite; }
   .agent-tile-status-dot.idle { background: var(--brand-amber); opacity: 0.5; }
@@ -2810,6 +2832,47 @@
       }
       prevAgentStatuses[a.name] = a.status;
     });
+
+    // ── Escalating notification ──
+    // When orchestrator has all tasks blocked, fire browser notification (once per escalation episode)
+    const orchData = data.agents;
+    const isEscalating = (orchData.escalating || 0) > 0 || (orchData.orch_all_blocked && orchData.orch_pending_task);
+    if (isEscalating && !window.__orchEscalatingNotified) {
+        window.__orchEscalatingNotified = true;
+        // Browser Notification API
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                new Notification('⚠ Orchestrator: All Tasks Blocked', {
+                    body: 'Orchestrator escalating to Capt Jhamb — all pending kanban tasks are blocked.',
+                    icon: '',
+                    requireInteraction: true
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(p => {
+                    if (p === 'granted') {
+                        new Notification('⚠ Orchestrator: All Tasks Blocked', {
+                            body: 'Orchestrator escalating to Capt Jhamb.',
+                            requireInteraction: true
+                        });
+                    }
+                });
+            }
+        }
+        // Visual banner on dashboard
+        let banner = document.getElementById('orchEscalatingBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'orchEscalatingBanner';
+            banner.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 24px;background:rgba(200,40,40,0.92);color:#fff;font-weight:600;font-size:14px;border-radius:8px;box-shadow:0 4px 20px rgba(200,40,40,0.4);letter-spacing:0.02em;backdrop-filter:blur(8px);border:1px solid rgba(255,100,100,0.3);';
+            document.body.appendChild(banner);
+        }
+        banner.textContent = '⚠ ESCALATING: All tasks blocked — Orchestrator reporting to Capt Jhamb';
+        banner.style.display = 'block';
+    } else if (!isEscalating && window.__orchEscalatingNotified) {
+        window.__orchEscalatingNotified = false;
+        const banner = document.getElementById('orchEscalatingBanner');
+        if (banner) banner.style.display = 'none';
+    }
 
     // Orchestrator tile (no hover bubble — detail panel shows info)
     const orch = agentMap['orchestrator'] || { name: 'orchestrator', role: 'Controller', status: 'dormant', last_task: '', model: '', total_logs: 0, completed: 0 };

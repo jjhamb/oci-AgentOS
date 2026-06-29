@@ -875,6 +875,9 @@ def agents_data():
         # so the orchestrator's kanban delegation logic can attribute work to specialists
         kanban_specialist_active = set()  # specialist agents with non-done default-profile tasks (ready or running)
         kanban_specialist_ready = set()   # specialist agents with ready (not yet started) tasks
+        # Orchestrator pending/blocked tracking (Option B explicit state flags)
+        orch_pending_task = False         # True when any non-done task assigned to default/orchestrator
+        orch_all_blocked = True           # True when all non-done tasks are blocked (nothing progressing)
         try:
             kconn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True)
             kconn.execute("PRAGMA query_only=1")
@@ -892,8 +895,11 @@ def agents_data():
             kconn.close()
 
             # Remap 'default' assignee to specialist agent based on task title/body
+            _orc_non_done_count = 0  # track non-done orchestrator tasks for blocked detection
+            _orc_blocked_count = 0   # track blocked orchestrator tasks
             for t in all_tasks:
                 assignee = t["assignee"]
+                original_assignee = assignee
                 if assignee == "default":
                     specialist = _map_default_task_to_specialist(t["title"], t.get("body", ""))
                     assignee = specialist
@@ -906,6 +912,19 @@ def agents_data():
                         if not has_started:
                             kanban_specialist_ready.add(specialist)
 
+                # --- Orchestrator pending/blocked tracking (Option B) ---
+                # Check direct-assigned orchestrator/infra tasks AND default-remapped tasks
+                has_started_o = t.get("started_at") is not None
+                has_completed_o = t.get("completed_at") is not None
+                is_done_o = has_completed_o or t.get("status") in ("done", "archived")
+                is_blocked_o = t.get("status") == "blocked"
+                if original_assignee in ("default", "orchestrator", "infra"):
+                    if not is_done_o:
+                        orch_pending_task = True
+                        _orc_non_done_count += 1
+                        if is_blocked_o:
+                            _orc_blocked_count += 1
+
                 # A task is "running" if it has started_at but no completed_at
                 # A task is "done" if it has completed_at
                 has_started = t.get("started_at") is not None
@@ -917,6 +936,12 @@ def agents_data():
                     kanban_running[assignee] = kanban_running.get(assignee, 0) + 1
                     if assignee not in kanban_task_titles:
                         kanban_task_titles[assignee] = t["title"]
+
+            # After loop: determine orch_all_blocked
+            if orch_pending_task and _orc_non_done_count > 0 and _orc_blocked_count == _orc_non_done_count:
+                orch_all_blocked = True
+            else:
+                orch_all_blocked = False
 
             # For recently completed tasks: add titles (within 2 hours)
             for t in all_tasks:
@@ -1013,6 +1038,11 @@ def agents_data():
                     except Exception:
                         pass
 
+                # Also pulsating if Orchestrator has pending (non-done) tasks — Option B
+                # Covers the gap from task receipt until agent starts working (status=ready)
+                if not orch_pulsating and orch_pending_task:
+                    orch_pulsating = True
+
                 # Also pulsating if recent activity on default channels (<2min)
                 if not orch_pulsating and last_seen:
                     try:
@@ -1029,7 +1059,12 @@ def agents_data():
                 if not orch_pulsating and discord_session_active.get(name, False):
                     orch_pulsating = True
 
-                if orch_pulsating:
+                # If all pending tasks are blocked, override to "escalating" state
+                # The orchestrator is actively attempting to resolve OR report to Capt Jhamb
+                if orch_pulsating and orch_all_blocked:
+                    status = "escalating"
+                    pulsating_agents.add(name)
+                elif orch_pulsating:
                     status = "pulsating"
                     pulsating_agents.add(name)
                 else:
@@ -1213,9 +1248,12 @@ def agents_data():
             "agents": agents,
             "total": len(agents),
             "pulsating": sum(1 for a in agents if a["status"] == "pulsating"),
+            "escalating": sum(1 for a in agents if a["status"] == "escalating"),
             "active": sum(1 for a in agents if a["status"] == "active"),
             "idle": sum(1 for a in agents if a["status"] == "idle"),
             "dormant": sum(1 for a in agents if a["status"] == "dormant"),
+            "orch_pending_task": orch_pending_task,
+            "orch_all_blocked": orch_all_blocked,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -1816,8 +1854,9 @@ class Handler(BaseHTTPRequestHandler):
                 result['completed_24h'] = cur3.fetchone()[0]
                 cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE status='failed' AND created_at > datetime('now', '-1 day')")
                 result['failed_24h'] = cur3.fetchone()[0]
-                cur3.execute("SELECT COUNT(*) FROM agent_logs WHERE created_at > datetime('now', '-1 day')")
-                result['messages_24h'] = cur3.fetchone()[0]
+                # Messages 24h — sum of LLM conversation messages from sessions
+                cur2.execute("SELECT COALESCE(SUM(message_count), 0) FROM sessions WHERE started_at > ?", (day_ago,))
+                result['messages_24h'] = cur2.fetchone()[0]
                 conn3.close()
 
                 # Token totals 24h
