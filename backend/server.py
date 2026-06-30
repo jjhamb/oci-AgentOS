@@ -1320,11 +1320,14 @@ def kanban_data():
             FROM tasks
             WHERE status != 'archived'
             ORDER BY created_at DESC
-            LIMIT 100
+            LIMIT 50
         """)
         tasks = []
         for r in cur.fetchall():
             t = dict(r)
+            # Truncate long body fields — they bloat the snapshot by 40+ KB
+            if t.get("body") and len(t["body"]) > 200:
+                t["body"] = t["body"][:200] + "…"
             # Convert Unix integer timestamps to ISO
             for field in ("created_at", "started_at", "completed_at", "last_heartbeat_at"):
                 val = t.get(field)
@@ -1635,6 +1638,7 @@ def hermes_session_status():
 # ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     """Routes requests to the right handler."""
+    protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
         # Suppress default stderr logging
@@ -2214,6 +2218,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
