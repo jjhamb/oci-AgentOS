@@ -235,43 +235,6 @@
     theme: buildTheme('default'),
   });
 
-  // ── DEBUG: visible key event overlay ──
-  const debugEl = document.createElement('div');
-  debugEl.id = 'keyDebug';
-  debugEl.style.cssText = 'position:fixed;top:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:4px;z-index:9999;max-width:260px;white-space:pre-wrap;line-height:1.5;border:1px solid #333';
-  debugEl.textContent = 'KEY DEBUG\npress any key...';
-  document.body.appendChild(debugEl);
-  const debugLog = [];
-  function debugLogPush(s) {
-    debugLog.push(s);
-    if (debugLog.length > 8) debugLog.shift();
-    debugEl.textContent = 'KEY DEBUG\n' + debugLog.join('\n');
-  }
-  window.addEventListener('keydown', (e) => {
-    debugLogPush(`key="${e.key}" code="${e.code}" shift=${e.shiftKey}`);
-  }, true);
-
-  // Force US keyboard layout — some cloud VMs report wrong key maps
-  // English-India digits should work, but just in case:
-  const keyRemap = { '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5', '-': '6', 'è': '7', '_': '8', 'ç': '9', 'à': '0' };
-  term.attachCustomKeyEventHandler((e) => {
-    if (e.type === 'keydown' && keyRemap[e.key]) {
-      e.preventDefault();
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(keyRemap[e.key]);
-      }
-      return false;
-    }
-    return true;
-  });
-
-  // Auto-focus the terminal container so keyboard input works immediately
-  container.focus();
-  term.focus();
-
-  // Re-focus terminal when clicking anywhere in the wrapper
-  container.addEventListener('click', () => term.focus());
-
   const fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
 
@@ -279,6 +242,10 @@
   term.open(container);
   fitAddon.fit();
   window.term = term;
+
+  // Auto-focus the terminal so keyboard input works immediately
+  term.focus();
+  container.addEventListener('click', () => term.focus());
 
   function fitTerminal() { fitAddon.fit(); }
   window.addEventListener('resize', fitTerminal);
@@ -344,8 +311,8 @@
 
   function connect() {
     setConnStatus('connecting');
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.hostname}:${WS_PORT}`);
+    // Force ws:// for internal dashboard (wss fails if no TLS cert)
+    ws = new WebSocket(`ws://${location.hostname}:${WS_PORT}`);
 
     ws.onopen = () => {
       setConnStatus('online');
@@ -374,12 +341,59 @@
     };
   }
 
-  // Send input
+  // Send input — the keydown handler below sends keys directly via WebSocket.
+  // We keep term.onData as a fallback but suppress it when the keydown handler already sent.
+  let sentByKeyDown = false;
   term.onData(data => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (!sentByKeyDown && ws && ws.readyState === WebSocket.OPEN) {
       ws.send(data);
     }
+    sentByKeyDown = false; // reset for next event
   });
+
+  // ── BYPASS xterm.js keyboard handling ──
+  // On some cloud VMs, xterm.js keyboard handler drops certain keys.
+  // We capture all printable keys and send directly to PTY via WebSocket.
+  // xterm.js still handles display/output, we just bypass its input path.
+  window.addEventListener('keydown', (e) => {
+    // Only handle if terminal is visible (user is in terminal tab)
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    let data = null;
+
+    // Printable characters (length 1) — but NOT when modifier keys held
+    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      data = e.key;
+    }
+    // Enter key
+    else if (e.key === 'Enter') {
+      data = '\r';
+    }
+    // Backspace
+    else if (e.key === 'Backspace') {
+      data = '\x7f';
+    }
+    // Tab
+    else if (e.key === 'Tab') {
+      data = '\t';
+    }
+    // Escape
+    else if (e.key === 'Escape') {
+      data = '\x1b';
+    }
+    // Arrow keys
+    else if (e.key === 'ArrowUp') data = '\x1b[A';
+    else if (e.key === 'ArrowDown') data = '\x1b[B';
+    else if (e.key === 'ArrowRight') data = '\x1b[C';
+    else if (e.key === 'ArrowLeft') data = '\x1b[D';
+
+    if (data) {
+      e.preventDefault();
+      e.stopPropagation();
+      sentByKeyDown = true;
+      ws.send(data);
+    }
+  }, true);
 
   // Resize handler
   let resizeTimer;

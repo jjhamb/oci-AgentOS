@@ -2319,17 +2319,28 @@ async def pty_handler(websocket):
             # Check for incoming keystrokes from browser
             try:
                 msg = await asyncio.wait_for(websocket.recv(), timeout=0.02)
-                try:
-                    parsed = json.loads(msg)
-                    if parsed.get('type') == 'resize':
-                        cols = parsed.get('cols', 80)
-                        rows = parsed.get('rows', 24)
+                # Only treat as command if JSON parses to a dict
+                if isinstance(msg, str) and msg.startswith('{'):
+                    try:
+                        parsed = json.loads(msg)
+                        if isinstance(parsed, dict) and parsed.get('type') == 'resize':
+                            cols = parsed.get('cols', 80)
+                            rows = parsed.get('rows', 24)
+                            try:
+                                winsize = struct.pack('HHHH', rows, cols, 0, 0)
+                                fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+                            except (PermissionError, OSError):
+                                pass
+                        else:
+                            # JSON but not a resize command — send as-is
+                            os.write(master_fd, msg.encode('utf-8'))
+                    except (json.JSONDecodeError, OSError):
                         try:
-                            winsize = struct.pack('HHHH', rows, cols, 0, 0)
-                            fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
-                        except (PermissionError, OSError):
-                            pass
-                except json.JSONDecodeError:
+                            os.write(master_fd, msg.encode('utf-8'))
+                        except OSError:
+                            running = False
+                else:
+                    # Not JSON — raw keystrokes
                     try:
                         os.write(master_fd, msg.encode('utf-8'))
                     except OSError:
